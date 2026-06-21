@@ -52,6 +52,11 @@ model Exercise {
   primaryMuscles   Json
   /// JSON array of MuscleGroup codes.
   secondaryMuscles Json
+  /// Step-by-step instructions on how to perform the exercise.
+  instructions     String?
+  /// Common beginner mistakes and how to avoid them.
+  commonPitfalls   String?
+  isArchived       Boolean  @default(false)
   createdAt        DateTime @default(now())
 
   owner          User?             @relation(fields: [ownerId], references: [id], onDelete: Cascade)

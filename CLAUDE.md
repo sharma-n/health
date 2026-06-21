@@ -18,8 +18,15 @@ roadmap (§11).** This file is the quick-start; SPEC.md is the source of truth.
   cascade rules tested, `resetUserDataAction` + `deleteUserAction` wired to atomic ordered
   deletes (tested against full data graph), 37 system exercises seeded, `lib/units.ts` +
   Zod validation schemas for all new entities. Seed idempotent (run twice = 0 duplicates).
-- Next up: **Milestone 3** — exercise library CRUD, filters, clone system exercises.
-- All domain sections currently render a `<ComingSoon milestone="…" />` placeholder.
+- **Milestone 3 (exercise library CRUD + filters + clone): DONE & verified** — `Exercise.isArchived`,
+  `instructions`, `commonPitfalls` added to schema, 6 server actions (`create`, `update`, `archive`,
+  `unarchive`, `delete`, `clone`), 5 UI components (`MuscleGroupPicker`, `ExerciseForm`, `ExerciseCard`,
+  `ExerciseList`, `ExerciseFilters`, `ExerciseActions`), 4 pages (list/new/detail/edit), all
+  Zod-validated, rate-limited (30/5min), userId-scoped, deleted exercises protected if referenced in
+  workouts/sessions. Instructions (5000 char max) and common pitfalls (2000 char max) populated for all
+  37 system exercises; users can add/edit both fields on custom exercises.
+- Next up: **Milestone 4** — workout builder (create/edit, reorder, supersets, targets).
+- Remaining domain sections still render `<ComingSoon milestone="…" />` placeholder.
 
 ## Stack (note the versions — several have breaking changes vs. older training data)
 
