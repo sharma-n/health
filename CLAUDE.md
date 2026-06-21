@@ -25,7 +25,14 @@ roadmap (§11).** This file is the quick-start; SPEC.md is the source of truth.
   Zod-validated, rate-limited (30/5min), userId-scoped, deleted exercises protected if referenced in
   workouts/sessions. Instructions (5000 char max) and common pitfalls (2000 char max) populated for all
   37 system exercises; users can add/edit both fields on custom exercises.
-- Next up: **Milestone 4** — workout builder (create/edit, reorder, supersets, targets).
+- **Milestone 4 (workout builder): DONE & verified** — 3 server actions (`create`, `update`, `delete`),
+  6 UI components (`WorkoutCard`, `WorkoutList`, `WorkoutBuilder` with @dnd-kit drag-to-reorder,
+  `WorkoutExerciseRow`, `ExercisePicker`, `WorkoutDeleteForm`), 4 pages (list/new/detail/edit), all
+  Zod-validated, rate-limited (30/5min), userId-scoped. Workouts are ordered exercise lists with
+  per-exercise targets (sets, reps, weight, rest, notes), superset grouping, and drag-reorderable
+  exercises. Color-coded superset indicators on detail/builder views. Weight converts per user unit
+  preference (kg ↔ lbs) at input/display boundaries.
+- Next up: **Milestone 5** — plans/routines (weekly schedule + date range, statuses, "today's workout").
 - Remaining domain sections still render `<ComingSoon milestone="…" />` placeholder.
 
 ## Stack (note the versions — several have breaking changes vs. older training data)

@@ -3,8 +3,8 @@
 > A self-hostable web application to **program and follow exercise routines toward a health goal**.
 > Define exercises → compose workouts → schedule them into dated plans → log live sessions → track progress and analytics.
 
-**Status:** Living document — updated as milestones land. Milestone 3 (exercise library CRUD + filters + clone) complete.
-**Last updated:** 2026-06-21
+**Status:** Living document — updated as milestones land. Milestone 4 (workout builder) complete.
+**Last updated:** 2026-06-22
 
 ---
 

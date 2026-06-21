@@ -28,8 +28,22 @@ export const reorderWorkoutExercisesSchema = z.object({
   orderedIds: z.array(z.string().min(1)),
 });
 
+export const updateWorkoutSchema = workoutSchema.extend({
+  workoutId: z.string().min(1, "Workout ID is required."),
+});
+
+export const workoutIdSchema = z.object({
+  workoutId: z.string().min(1, "Workout ID is required."),
+});
+
+export const workoutFilterSchema = z.object({
+  q: z.string().optional(),
+});
+
 export type WorkoutExerciseInput = z.infer<typeof workoutExerciseSchema>;
 export type WorkoutInput = z.infer<typeof workoutSchema>;
+export type UpdateWorkoutInput = z.infer<typeof updateWorkoutSchema>;
+export type WorkoutIdInput = z.infer<typeof workoutIdSchema>;
 export type ReorderWorkoutExercisesInput = z.infer<
   typeof reorderWorkoutExercisesSchema
 >;
