@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Check, AlertCircle } from "lucide-react";
 
 import { updateProfileAction } from "@/lib/actions/auth";
@@ -16,6 +16,8 @@ export function ProfileEditor({
   unitPreference: initialUnitPreference,
 }: ProfileEditorProps) {
   const [state, formAction] = useActionState(updateProfileAction, {});
+  const [displayName, setDisplayName] = useState(initialDisplayName);
+  const [unitPreference, setUnitPreference] = useState<UnitPreference>(initialUnitPreference);
 
   return (
     <form action={formAction} className="space-y-4">
@@ -41,7 +43,8 @@ export function ProfileEditor({
           id="displayName"
           name="displayName"
           type="text"
-          defaultValue={initialDisplayName}
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
           maxLength={80}
           className="w-full h-11 rounded-[var(--radius-app)] border border-border bg-surface px-3 text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/30"
         />
@@ -60,7 +63,8 @@ export function ProfileEditor({
               type="radio"
               name="unitPreference"
               value="KG"
-              defaultChecked={initialUnitPreference === "KG"}
+              checked={unitPreference === "KG"}
+              onChange={() => setUnitPreference("KG")}
               className="h-4 w-4 cursor-pointer"
             />
             <span className="text-sm text-foreground">Kilograms (kg)</span>
@@ -70,7 +74,8 @@ export function ProfileEditor({
               type="radio"
               name="unitPreference"
               value="LBS"
-              defaultChecked={initialUnitPreference === "LBS"}
+              checked={unitPreference === "LBS"}
+              onChange={() => setUnitPreference("LBS")}
               className="h-4 w-4 cursor-pointer"
             />
             <span className="text-sm text-foreground">Pounds (lbs)</span>
