@@ -6,13 +6,19 @@ import { Prisma } from "@/generated/prisma/client";
 
 import { signIn, signOut } from "@/auth";
 import { prisma } from "@/lib/db";
-import { loginSchema, registerSchema } from "@/lib/validation/auth";
+import { loginSchema, registerSchema, updateProfileSchema } from "@/lib/validation/auth";
 import { DEFAULT_UNIT_PREFERENCE } from "@/lib/constants";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export type AuthFormState = {
   error?: string;
   fieldErrors?: Record<string, string[]>;
+};
+
+export type ProfileFormState = {
+  error?: string;
+  fieldErrors?: Record<string, string[]>;
+  success?: boolean;
 };
 
 const BCRYPT_COST = 12;
@@ -124,4 +130,45 @@ export async function loginAction(
 
 export async function signOutAction() {
   await signOut({ redirectTo: "/login" });
+}
+
+export async function updateProfileAction(
+  _prevState: ProfileFormState,
+  formData: FormData,
+): Promise<ProfileFormState> {
+  const { auth: authFn } = await import("@/auth");
+  const session = await authFn();
+  const userId = session?.user?.id;
+
+  if (!userId) {
+    return { error: "Unauthorized." };
+  }
+
+  const ip = await getClientIp();
+  if (ip && !checkRateLimit(`profile:${ip}`, 10, 60 * 1000)) {
+    return { error: "Too many requests. Please try again later." };
+  }
+
+  const parsed = updateProfileSchema.safeParse({
+    displayName: formData.get("displayName"),
+    unitPreference: formData.get("unitPreference"),
+  });
+
+  if (!parsed.success) {
+    return { fieldErrors: parsed.error.flatten().fieldErrors };
+  }
+
+  try {
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        displayName: parsed.data.displayName,
+        unitPreference: parsed.data.unitPreference,
+      },
+    });
+  } catch {
+    return { error: "Failed to update profile. Please try again." };
+  }
+
+  return { success: true };
 }
