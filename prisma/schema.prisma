@@ -2,7 +2,8 @@
 // See SPEC.md §4. NOTE: the SQLite provider does not support native `enum`
 // types or scalar-list fields. "Enum" columns are stored as `String` and
 // validated in the app layer (Zod, see src/lib/validation). Array fields
-// (e.g. muscle groups) are modelled with JSON or join tables in Milestone 2.
+// (e.g. muscle groups) are stored as `Json` columns and validated in the app
+// layer; SQLite has no scalar-list type.
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
@@ -28,6 +29,199 @@ model User {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  // Domain relations (exercises, workouts, plans, sessions, bodyMetrics,
-  // goals) are added in Milestone 2.
+  // Domain relations — all cascade on user delete (account deletion / reset).
+  exercises   Exercise[]
+  workouts    Workout[]
+  plans       Plan[]
+  sessions    Session[]
+  bodyMetrics BodyMetric[]
+  goals       Goal[]
+}
+
+/// An exercise definition. ownerId null + isSystem true = shared, read-only seed
+/// row; otherwise owned by a single user. "edit" of a system row clones it (M3).
+model Exercise {
+  id               String   @id @default(cuid())
+  ownerId          String?
+  isSystem         Boolean  @default(false)
+  name             String
+  description      String?
+  /// One of EQUIPMENT (src/lib/constants.ts) — validated by Zod.
+  equipment        String
+  /// JSON array of MuscleGroup codes. SQLite has no scalar-list type.
+  primaryMuscles   Json
+  /// JSON array of MuscleGroup codes.
+  secondaryMuscles Json
+  createdAt        DateTime @default(now())
+
+  owner          User?             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  workoutEntries WorkoutExercise[]
+  sessionEntries SessionExercise[]
+
+  @@index([ownerId])
+}
+
+/// Reusable workout template = an ordered list of exercises with targets.
+model Workout {
+  id          String   @id @default(cuid())
+  ownerId     String
+  name        String
+  description String?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  owner         User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  exercises     WorkoutExercise[]
+  scheduleItems PlanScheduleItem[]
+  sessions      Session[]
+
+  @@index([ownerId])
+}
+
+/// Ordered exercise inside a workout, with per-exercise targets and supersets.
+model WorkoutExercise {
+  id             String  @id @default(cuid())
+  workoutId      String
+  exerciseId     String
+  order          Int
+  targetSets     Int?
+  targetReps     Int?
+  targetWeightKg Float?
+  restSeconds    Int?
+  /// Exercises sharing a value form a superset.
+  supersetGroup  String?
+  notes          String?
+
+  workout  Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  // Restrict: an exercise referenced by a workout cannot be hard-deleted (M3
+  // offers archive instead). Bulk user wipes delete these rows first.
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+
+  @@index([workoutId])
+  @@index([exerciseId])
+}
+
+/// A routine over a date range with a weekly schedule.
+model Plan {
+  id          String   @id @default(cuid())
+  ownerId     String
+  name        String
+  description String?
+  startDate   DateTime
+  endDate     DateTime
+  /// One of PLAN_STATUSES — validated by Zod.
+  status      String   @default("DRAFT")
+  createdAt   DateTime @default(now())
+
+  owner    User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  schedule PlanScheduleItem[]
+  sessions Session[]
+
+  @@index([ownerId, status])
+}
+
+/// Weekly template item: a weekday mapped to a workout, repeated across the range.
+model PlanScheduleItem {
+  id        String @id @default(cuid())
+  planId    String
+  /// 0 = Sunday ... 6 = Saturday.
+  dayOfWeek Int
+  workoutId String
+
+  plan    Plan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  workout Workout @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+
+  @@index([planId])
+  @@index([workoutId])
+}
+
+/// A logged workout instance.
+model Session {
+  id              String    @id @default(cuid())
+  userId          String
+  workoutId       String?
+  planId          String?
+  scheduledDate   DateTime?
+  startedAt       DateTime
+  endedAt         DateTime?
+  durationSeconds Int?
+  /// 1..10 whole-session RPE.
+  overallEffort   Int?
+  notes           String?
+
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // SetNull: a session is historical truth; deleting the template/plan it came
+  // from detaches but never deletes the log.
+  workout   Workout?          @relation(fields: [workoutId], references: [id], onDelete: SetNull)
+  plan      Plan?             @relation(fields: [planId], references: [id], onDelete: SetNull)
+  exercises SessionExercise[]
+
+  @@index([userId, startedAt])
+  @@index([planId, scheduledDate])
+}
+
+/// An exercise performed within a session.
+model SessionExercise {
+  id         String @id @default(cuid())
+  sessionId  String
+  exerciseId String
+  order      Int
+
+  session  Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  // Restrict: protects progression history — see WorkoutExercise.exercise.
+  exercise Exercise     @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  sets     SessionSet[]
+
+  @@index([sessionId])
+  @@index([exerciseId])
+}
+
+/// A single logged set.
+model SessionSet {
+  id                String  @id @default(cuid())
+  sessionExerciseId String
+  setNumber         Int
+  weightKg          Float?
+  reps              Int?
+  completed         Boolean @default(false)
+  restSeconds       Int?
+  durationSeconds   Int?
+
+  sessionExercise SessionExercise @relation(fields: [sessionExerciseId], references: [id], onDelete: Cascade)
+
+  @@index([sessionExerciseId])
+}
+
+/// A body measurement over time. value is kg for BODYWEIGHT, cm for lengths,
+/// % for BODY_FAT_PCT.
+model BodyMetric {
+  id     String   @id @default(cuid())
+  userId String
+  date   DateTime
+  /// One of BODY_METRIC_TYPES — validated by Zod.
+  type   String
+  value  Float
+  note   String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type, date])
+}
+
+/// A user goal; the `config` JSON shape depends on `type` (SPEC §4.2).
+model Goal {
+  id         String    @id @default(cuid())
+  userId     String
+  /// One of GOAL_TYPES — validated by Zod.
+  type       String
+  title      String
+  targetDate DateTime?
+  /// One of GOAL_STATUSES — validated by Zod.
+  status     String    @default("ACTIVE")
+  config     Json
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
 }

@@ -56,6 +56,38 @@ async function adminRateLimited(): Promise<boolean> {
   return !!ip && !checkRateLimit(`admin:${ip}`, 30, 5 * 60 * 1000);
 }
 
+/**
+ * Returns the ordered list of scoped deleteMany operations that wipe every
+ * domain row belonging to `userId`. Compose into a single `prisma.$transaction`
+ * so the wipe is atomic. Used by both "reset data" and "delete user".
+ *
+ * Order matters: rows that *reference* an exercise (SessionExercise,
+ * WorkoutExercise) are deleted before the owned exercises themselves, so the
+ * `onDelete: Restrict` on those relations never trips. Session/Plan/Workout
+ * children precede their parents. Owned exercises are scoped to `ownerId` so
+ * shared system exercises (`ownerId: null`) are never touched.
+ */
+function userDataDeletions(userId: string) {
+  return [
+    prisma.sessionSet.deleteMany({
+      where: { sessionExercise: { session: { userId } } },
+    }),
+    prisma.sessionExercise.deleteMany({ where: { session: { userId } } }),
+    prisma.session.deleteMany({ where: { userId } }),
+    prisma.workoutExercise.deleteMany({
+      where: { workout: { ownerId: userId } },
+    }),
+    prisma.planScheduleItem.deleteMany({
+      where: { plan: { ownerId: userId } },
+    }),
+    prisma.plan.deleteMany({ where: { ownerId: userId } }),
+    prisma.workout.deleteMany({ where: { ownerId: userId } }),
+    prisma.bodyMetric.deleteMany({ where: { userId } }),
+    prisma.goal.deleteMany({ where: { userId } }),
+    prisma.exercise.deleteMany({ where: { ownerId: userId } }),
+  ];
+}
+
 export async function changeUserPasswordAction(
   _prev: AdminFormState,
   formData: FormData,
@@ -117,8 +149,22 @@ export async function deleteUserAction(
     return { fieldErrors: { adminPassword: ["Password incorrect."] } };
   }
 
-  const result = await prisma.user.deleteMany({ where: { id: userId } });
-  if (result.count === 0) return FORBIDDEN;
+  // Confirm the target exists so the response is honest (a bare cascade delete
+  // can't distinguish "not found" cleanly once we wrap it in a transaction).
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true },
+  });
+  if (!target) return FORBIDDEN;
+
+  // Wipe domain rows in FK-safe order, then remove the account — all atomic.
+  // Deleting the user alone would cascade to owned exercises while sessions /
+  // workouts still reference them, tripping `onDelete: Restrict`; the ordered
+  // deletes clear those references first.
+  await prisma.$transaction([
+    ...userDataDeletions(userId),
+    prisma.user.deleteMany({ where: { id: userId } }),
+  ]);
 
   revalidatePath("/admin");
   return { success: "User deleted." };
@@ -154,9 +200,10 @@ export async function resetUserDataAction(
   });
   if (!target) return FORBIDDEN;
 
-  // TODO(M2): cascade-delete the user's domain rows (exercises, workouts, plans,
-  // sessions, bodyMetrics, goals) in a $transaction of scoped deleteMany calls.
-  // No domain data exists yet, so this is a verified no-op for now.
+  // Atomically wipe all of the user's domain rows (the user account itself is
+  // kept). Ordered so the exercise `Restrict` relations never trip — see
+  // userDataDeletions.
+  await prisma.$transaction(userDataDeletions(userId));
 
   revalidatePath("/admin");
   return { success: "User data reset." };

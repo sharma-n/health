@@ -12,11 +12,13 @@ roadmap (§11).** This file is the quick-start; SPEC.md is the source of truth.
 - **Security hardening (post-M1): DONE** — headers, rate limiting, email-enumeration fix,
   bcrypt cap, select scoping, password confirmation, ALLOW_REGISTRATION disclosure fix.
 - **Admin & user management (post-M1): DONE** — first registered user is the admin; `/admin`
-  screen to change passwords, delete users, reset data (stubbed until M2), grant/revoke admin,
+  screen to change passwords, delete users, reset data (now wired to cascade deletes), grant/revoke admin,
   list users. See SPEC.md §8.7 and the Admin section below.
-- Next up: **Milestone 2** — full data model (exercises, workouts, plans, sessions,
-  goals, metrics) + seeded exercise library. *Also wire `resetUserDataAction` to real
-  cascade deletes (currently a verified no-op).*
+- **Milestone 2 (data model + migrations + seed): DONE & verified** — 10 domain models, FK
+  cascade rules tested, `resetUserDataAction` + `deleteUserAction` wired to atomic ordered
+  deletes (tested against full data graph), 37 system exercises seeded, `lib/units.ts` +
+  Zod validation schemas for all new entities. Seed idempotent (run twice = 0 duplicates).
+- Next up: **Milestone 3** — exercise library CRUD, filters, clone system exercises.
 - All domain sections currently render a `<ComingSoon milestone="…" />` placeholder.
 
 ## Stack (note the versions — several have breaking changes vs. older training data)
@@ -88,7 +90,9 @@ schemas in `src/lib/validation/admin.ts`, UI under `src/app/(app)/admin/` +
   delete, reset-data.
 - **Guardrails:** never let an admin delete their own account, and never demote the **last**
   admin (count before revoking). These prevent a permanent lock-out.
-- `resetUserDataAction` is a verified **no-op stub** until M2 wires real cascade deletes.
+- `resetUserDataAction` + `deleteUserAction` use a shared `userDataDeletions()` helper that
+  atomically wipes all domain rows (10 scoped `deleteMany` calls) in FK-safe order so
+  `onDelete: Restrict` rules never trip. User account is preserved on reset, deleted on user delete.
 
 ## Layout
 
@@ -101,9 +105,10 @@ src/
     api/auth/[...nextauth]/route.ts
     page.tsx                       # redirects -> /dashboard
   components/  auth/, admin/, ui/, app-shell/ (header, bottom-nav, page-header, coming-soon)
-  lib/  db.ts, constants.ts, actions/ (auth, admin), validation/ (auth, admin)
+  lib/  db.ts, constants.ts, units.ts, actions/ (auth, admin), validation/ (auth, admin,
+        exercise, workout, plan, session, body-metric, goal)
   generated/prisma/                # generated client (gitignored)
-prisma/  schema.prisma, migrations/
+prisma/  schema.prisma, migrations/, seed.ts
 ```
 
 ## Conventions

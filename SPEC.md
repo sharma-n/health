@@ -3,7 +3,7 @@
 > A self-hostable web application to **program and follow exercise routines toward a health goal**.
 > Define exercises → compose workouts → schedule them into dated plans → log live sessions → track progress and analytics.
 
-**Status:** Living document — updated as milestones land. Milestone 1 (scaffold + auth + app shell + security hardening + admin/user management, §8.7) complete.
+**Status:** Living document — updated as milestones land. Milestone 2 (full data model + migrations + seeded library) complete.
 **Last updated:** 2026-06-21
 
 ---
@@ -420,8 +420,7 @@ promotes/demotes other users from the in-app **Admin** screen (`/admin`, linked 
 Admin capabilities (`src/lib/actions/admin.ts`, validated by `src/lib/validation/admin.ts`):
 
 1. **Change any user's password** · 2. **Delete a user** · 3. **Reset a user's data**
-   (stubbed until Milestone 2 — no domain data exists yet; the action verifies everything and
-   no-ops, becoming a `$transaction` of scoped `deleteMany`s when the models land) ·
+   (atomically wipes all domain rows in FK-safe order; user account preserved) ·
 4. **Grant/revoke admin** on another user · 5. **View the full user list**.
 
 Authorization model:
