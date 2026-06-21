@@ -1,0 +1,30 @@
+// Health & Workout Programming App — Prisma schema
+// See SPEC.md §4. NOTE: the SQLite provider does not support native `enum`
+// types or scalar-list fields. "Enum" columns are stored as `String` and
+// validated in the app layer (Zod, see src/lib/validation). Array fields
+// (e.g. muscle groups) are modelled with JSON or join tables in Milestone 2.
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+/// An application account. All domain data is scoped to a User.
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  passwordHash   String
+  displayName    String
+  /// "KG" | "LBS" — canonical storage is always kg; this is a display pref.
+  unitPreference String   @default("KG")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Domain relations (exercises, workouts, plans, sessions, bodyMetrics,
+  // goals) are added in Milestone 2.
+}
