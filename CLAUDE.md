@@ -11,8 +11,12 @@ roadmap (§11).** This file is the quick-start; SPEC.md is the source of truth.
 - **Milestone 1 (scaffold + auth + app shell): DONE & verified** (lint + build + HTTP login flow).
 - **Security hardening (post-M1): DONE** — headers, rate limiting, email-enumeration fix,
   bcrypt cap, select scoping, password confirmation, ALLOW_REGISTRATION disclosure fix.
+- **Admin & user management (post-M1): DONE** — first registered user is the admin; `/admin`
+  screen to change passwords, delete users, reset data (stubbed until M2), grant/revoke admin,
+  list users. See SPEC.md §8.7 and the Admin section below.
 - Next up: **Milestone 2** — full data model (exercises, workouts, plans, sessions,
-  goals, metrics) + seeded exercise library.
+  goals, metrics) + seeded exercise library. *Also wire `resetUserDataAction` to real
+  cascade deletes (currently a verified no-op).*
 - All domain sections currently render a `<ComingSoon milestone="…" />` placeholder.
 
 ## Stack (note the versions — several have breaking changes vs. older training data)
@@ -58,7 +62,8 @@ After editing `prisma/schema.prisma`: run a migration, then `npx prisma generate
 ## Auth architecture (split for edge vs. node)
 
 - `src/auth.config.ts` — **edge-safe** (no DB/bcrypt): `pages`, `session`, `trustHost`,
-  `authorized` (route guard), `jwt`/`session` callbacks (carry `id` + `unitPreference`).
+  `authorized` (route guard; also gates `/admin/*` on `isAdmin`), `jwt`/`session` callbacks
+  (carry `id` + `unitPreference` + `isAdmin`).
 - `src/auth.ts` — full config: Credentials provider with Prisma + bcrypt `authorize`.
   Exports `handlers`, `auth`, `signIn`, `signOut`.
 - `src/proxy.ts` — middleware/route protection (imports only `auth.config`).
@@ -67,6 +72,24 @@ After editing `prisma/schema.prisma`: run a migration, then `npx prisma generate
   JWT type (augmenting `next-auth/jwt` does NOT merge, it only re-exports).
 - Server actions: `src/lib/actions/auth.ts` (`registerAction`, `loginAction`, `signOutAction`).
 
+## Admin (first-user-is-admin)
+
+The **first registered user** becomes admin — `registerAction` sets `isAdmin: true` inside a
+`prisma.$transaction` when `user.count() === 0`. `isAdmin` rides the JWT/session like
+`unitPreference`. Admin server actions live in `src/lib/actions/admin.ts`
+(`changeUserPasswordAction`, `deleteUserAction`, `resetUserDataAction`, `setUserRoleAction`),
+schemas in `src/lib/validation/admin.ts`, UI under `src/app/(app)/admin/` +
+`src/components/admin/`. SPEC.md §8.7 is the full spec. Rules when touching admin code:
+
+- **Re-check `isAdmin` from the DB, never trust the JWT alone.** Use the `requireAdmin()` helper
+  — the JWT can be stale up to 30 days after a demotion (the known non-revocability tradeoff).
+  The proxy/page guards on `isAdmin` are convenience only; the action boundary is the real gate.
+- **Destructive actions require the admin's password** (`bcrypt.compare`) — change-password,
+  delete, reset-data.
+- **Guardrails:** never let an admin delete their own account, and never demote the **last**
+  admin (count before revoking). These prevent a permanent lock-out.
+- `resetUserDataAction` is a verified **no-op stub** until M2 wires real cascade deletes.
+
 ## Layout
 
 ```
@@ -74,11 +97,11 @@ src/
   app/
     (auth)/ login, register        # public, centered-card layout
     (app)/  dashboard, exercises, workouts, plans, sessions, metrics,
-            goals, analytics, more, profile   # authed shell (header + BottomNav)
+            goals, analytics, more, profile, admin   # authed shell (header + BottomNav)
     api/auth/[...nextauth]/route.ts
     page.tsx                       # redirects -> /dashboard
-  components/  auth/, ui/, app-shell/ (header, bottom-nav, page-header, coming-soon)
-  lib/  db.ts, constants.ts, actions/, validation/
+  components/  auth/, admin/, ui/, app-shell/ (header, bottom-nav, page-header, coming-soon)
+  lib/  db.ts, constants.ts, actions/ (auth, admin), validation/ (auth, admin)
   generated/prisma/                # generated client (gitignored)
 prisma/  schema.prisma, migrations/
 ```
@@ -97,7 +120,11 @@ prisma/  schema.prisma, migrations/
 - **HTTP security headers** — `next.config.ts` sets CSP, `X-Frame-Options: DENY`,
   `X-Content-Type-Options`, HSTS, `Referrer-Policy`, and `Permissions-Policy` on all routes.
   CSP uses `'unsafe-inline'` for `script-src` (required by Next.js inline hydration scripts);
-  nonce-based strict CSP is the correct upgrade path (see Deferred below).
+  nonce-based strict CSP is the correct upgrade path (see Deferred below). **In dev only**,
+  `script-src` also includes `'unsafe-eval'` — React's dev build uses `eval()` for debugging,
+  and strict browsers (**Firefox** especially; Chromium is lenient) otherwise block React's dev
+  runtime so nothing hydrates (native `<form>` POSTs still work, masking it). Production never
+  uses eval and stays strict (gated on `NODE_ENV` in `next.config.ts`).
 - **Rate limiting** — in-process sliding-window limiter in `src/lib/rate-limit.ts`.
   Login: 10 attempts/IP/15 min. Register: 5/IP/hr. Skips cleanly when IP is unavailable
   (local dev without a reverse proxy). Apply to any new sensitive action — use `checkRateLimit`.

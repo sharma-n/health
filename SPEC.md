@@ -3,7 +3,7 @@
 > A self-hostable web application to **program and follow exercise routines toward a health goal**.
 > Define exercises → compose workouts → schedule them into dated plans → log live sessions → track progress and analytics.
 
-**Status:** Living document — updated as milestones land. Milestone 1 (scaffold + auth + app shell + security hardening) complete.
+**Status:** Living document — updated as milestones land. Milestone 1 (scaffold + auth + app shell + security hardening + admin/user management, §8.7) complete.
 **Last updated:** 2026-06-21
 
 ---
@@ -127,6 +127,7 @@ model User {
   passwordHash   String
   displayName    String
   unitPreference UnitPreference @default(KG)
+  isAdmin        Boolean  @default(false)  // first registered user; see §8.7
   createdAt      DateTime @default(now())
   // relations: exercises, workouts, plans, sessions, bodyMetrics, goals
 }
@@ -330,6 +331,7 @@ Server actions (and a few route handlers) grouped by resource. **Every** action 
 | Resource | Actions |
 |---|---|
 | **Auth** | `register`, `login` (Auth.js), `logout`, `updateProfile` (displayName, unitPreference) |
+| **Admin** (admins only, §8.7) | `changeUserPasswordAction`, `deleteUserAction`, `resetUserDataAction`, `setUserRoleAction` (grant/revoke). All re-check `isAdmin` against the DB; destructive ones require the admin's password. |
 | **Exercises** | `listExercises(filter)`, `getExercise`, `createExercise`, `updateExercise`, `cloneSystemExercise`, `archiveExercise` |
 | **Workouts** | `listWorkouts`, `getWorkout`, `createWorkout`, `updateWorkout`, `reorderWorkoutExercises`, `deleteWorkout` |
 | **Plans** | `listPlans`, `getPlan`, `createPlan`, `updatePlan`, `setPlanStatus`, `getPlanOccurrences(range)`, `deletePlan` |
@@ -370,6 +372,8 @@ Rate limiting is skipped when IP cannot be determined (local dev with no reverse
 | Header | Value | Purpose |
 |---|---|---|
 | `Content-Security-Policy` | `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'` | Blocks third-party script/frame injection |
+
+> **Dev-only `'unsafe-eval'`:** in development the `script-src` additionally includes `'unsafe-eval'` (gated on `process.env.NODE_ENV` in `next.config.ts`). React's **development** build uses `eval()` for debugging features (e.g. reconstructing call stacks); a CSP without it makes strict browsers — **notably Firefox** — block React's dev runtime, so the client never hydrates and `onClick`/`useState` silently do nothing (native `<form>` POSTs still work, which masks the problem; Chromium is more lenient and may not surface it). React **never** uses `eval()` in production, so the production CSP omits `'unsafe-eval'` and stays strict.
 | `X-Frame-Options` | `DENY` | Clickjacking prevention (legacy browsers) |
 | `X-Content-Type-Options` | `nosniff` | MIME-type sniffing prevention |
 | `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | Enforces HTTPS after first visit |
@@ -398,11 +402,43 @@ Before a server action is considered complete:
 - [ ] Rate limit applied if the action is sensitive, expensive, or bulk-writable.
 - [ ] Error messages do not reveal existence of other users' resources.
 - [ ] No server-only imports (`db.ts`, `auth.ts`) inside `"use client"` files.
+- [ ] Admin-only actions re-read `isAdmin` from the **DB** (not the JWT) — see §8.7.
 
 ### 8.6 Known limitations accepted for v1
 
 - **JWT session non-revocability:** sign-out deletes the session cookie but the JWT itself remains valid until expiry. A stolen cookie cannot be remotely invalidated without switching to DB sessions or adding a token blocklist. Acceptable for a personal self-hosted deployment; revisit if threat model changes.
 - **`script-src 'unsafe-inline'` in CSP:** required by Next.js App Router's inline hydration scripts. The correct fix is nonce injection in `src/proxy.ts` propagated to `<Script>` components; deferred until Next.js makes this straightforward without custom infrastructure.
+
+### 8.7 Admin & user management
+
+The **very first registered user becomes the admin** (`isAdmin = true`, set inside
+`registerAction`'s create transaction when `user.count() === 0`). Every later account is a
+normal user; `isAdmin` defaults to `false` and is never set by self-registration. An admin
+promotes/demotes other users from the in-app **Admin** screen (`/admin`, linked from the
+**More** page for admins only).
+
+Admin capabilities (`src/lib/actions/admin.ts`, validated by `src/lib/validation/admin.ts`):
+
+1. **Change any user's password** · 2. **Delete a user** · 3. **Reset a user's data**
+   (stubbed until Milestone 2 — no domain data exists yet; the action verifies everything and
+   no-ops, becoming a `$transaction` of scoped `deleteMany`s when the models land) ·
+4. **Grant/revoke admin** on another user · 5. **View the full user list**.
+
+Authorization model:
+
+- **`isAdmin` flows through the JWT/session** (`auth.config.ts` callbacks → `session.user.isAdmin`).
+  The proxy route-guard gates `/admin/*` at the edge and the page re-checks the live session —
+  but these are *convenience* gates.
+- **The DB is the source of truth.** Every admin action calls `requireAdmin()`, which re-reads
+  `isAdmin` from the database, because the JWT can be **stale for up to 30 days** after a demotion
+  (§8.6). A demoted user's still-parseable token is rejected at the action boundary; a
+  newly-promoted user must sign out and back in before their token reflects admin.
+- **Destructive actions require re-authentication** — the admin re-enters their own password
+  (`bcrypt.compare` against their hash) to change a password, delete a user, or reset data.
+- **Guardrails:** an admin **cannot delete their own account**, and the **last remaining admin
+  cannot be demoted** (count checked before revoking) — preventing a lock-out.
+- Admin actions are rate-limited (`admin:{ip}`, 30 / 5 min) and return generic boundary errors
+  identical to the unauthorized case (§8.4 rule 6).
 
 ---
 
@@ -457,7 +493,7 @@ docker compose up -d    # migrations + seed run automatically on first boot
 ## 11. Milestones (suggested build order)
 
 1. **Scaffold + auth** — Next.js + Tailwind + Auth.js, register/login, app shell with bottom nav.
-2. **Data model + migrations + seed** — full Prisma schema, initial migration, seeded exercise library.
+2. **Data model + migrations + seed** — full Prisma schema, initial migration, seeded exercise library. *Also: wire the admin "reset user data" action (`resetUserDataAction`, §8.7) to real cascade deletes now that domain models exist.*
 3. **Exercise library** — CRUD, filters, clone system exercises.
 4. **Workout builder** — create/edit, reorder, supersets, targets.
 5. **Plans/routines** — weekly schedule + date range, statuses, "today's workout."

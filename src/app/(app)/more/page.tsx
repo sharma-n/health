@@ -6,9 +6,11 @@ import {
   Ruler,
   Target,
   User,
+  ShieldCheck,
   ChevronRight,
   type LucideIcon,
 } from "lucide-react";
+import { auth } from "@/auth";
 import { PageHeader } from "@/components/app-shell/page-header";
 
 export const metadata: Metadata = { title: "More — Health" };
@@ -21,12 +23,19 @@ const LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/profile", label: "Profile & settings", icon: User },
 ];
 
-export default function MorePage() {
+export default async function MorePage() {
+  const session = await auth();
+  // Admin entry is appended only for admins; the route is also guarded by the
+  // proxy and the page itself, so a hidden link is purely cosmetic, not security.
+  const links = session?.user?.isAdmin
+    ? [...LINKS, { href: "/admin", label: "Admin", icon: ShieldCheck }]
+    : LINKS;
+
   return (
     <div>
       <PageHeader title="More" />
       <ul className="divide-y divide-border overflow-hidden rounded-[var(--radius-app)] border border-border bg-surface">
-        {LINKS.map(({ href, label, icon: Icon }) => (
+        {links.map(({ href, label, icon: Icon }) => (
           <li key={href}>
             <Link
               href={href}

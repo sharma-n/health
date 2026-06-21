@@ -6,11 +6,13 @@ declare module "next-auth" {
     user: {
       id: string;
       unitPreference: UnitPreference;
+      isAdmin: boolean;
     } & DefaultSession["user"];
   }
 
   interface User {
     unitPreference: UnitPreference;
+    isAdmin: boolean;
   }
 }
 
@@ -20,5 +22,6 @@ declare module "@auth/core/jwt" {
   interface JWT {
     id: string;
     unitPreference: UnitPreference;
+    isAdmin: boolean;
   }
 }

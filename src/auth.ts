@@ -28,6 +28,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             displayName: true,
             passwordHash: true,
             unitPreference: true,
+            isAdmin: true,
           },
         });
         if (!user) return null;
@@ -43,6 +44,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: user.email,
           name: user.displayName,
           unitPreference: user.unitPreference as UnitPreference,
+          isAdmin: user.isAdmin,
         };
       },
     }),

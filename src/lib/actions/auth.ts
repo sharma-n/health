@@ -51,13 +51,19 @@ export async function registerAction(
   const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
 
   try {
-    await prisma.user.create({
-      data: {
-        email,
-        displayName,
-        passwordHash,
-        unitPreference: DEFAULT_UNIT_PREFERENCE,
-      },
+    // The very first registered user becomes the admin. Run the count + create
+    // in a transaction so two simultaneous first-registrations can't both win.
+    await prisma.$transaction(async (tx) => {
+      const isFirstUser = (await tx.user.count()) === 0;
+      await tx.user.create({
+        data: {
+          email,
+          displayName,
+          passwordHash,
+          unitPreference: DEFAULT_UNIT_PREFERENCE,
+          isAdmin: isFirstUser,
+        },
+      });
     });
   } catch (error) {
     if (

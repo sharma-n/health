@@ -29,23 +29,36 @@ export const authConfig = {
         return true;
       }
 
+      // Admin area: requires an admin session. This is the cheap edge gate
+      // (JWT can be stale up to 30 days); every admin server action re-checks
+      // isAdmin against the DB. Non-admins are bounced to the dashboard.
+      if (nextUrl.pathname.startsWith("/admin")) {
+        if (!isLoggedIn) return false;
+        if (!auth?.user?.isAdmin) {
+          return Response.redirect(new URL("/dashboard", nextUrl));
+        }
+        return true;
+      }
+
       // Everything else requires a session.
       return isLoggedIn;
     },
-    // Persist user id + unit preference into the JWT.
+    // Persist user id + unit preference + admin flag into the JWT.
     jwt({ token, user }) {
       // `user` is only present on sign-in; our authorize() always sets id.
       if (user?.id) {
         token.id = user.id;
         token.unitPreference = user.unitPreference;
+        token.isAdmin = user.isAdmin;
       }
       return token;
     },
-    // Expose id + unit preference on the session.
+    // Expose id + unit preference + admin flag on the session.
     session({ session, token }) {
       if (session.user) {
         session.user.id = token.id;
         session.user.unitPreference = token.unitPreference;
+        session.user.isAdmin = token.isAdmin;
       }
       return session;
     },
