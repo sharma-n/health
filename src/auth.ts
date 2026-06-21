@@ -9,6 +9,35 @@ import type { UnitPreference } from "@/lib/constants";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
+  callbacks: {
+    ...authConfig.callbacks,
+    // Override the edge-safe jwt callback with a Node-runtime version that
+    // re-reads mutable user fields from the DB on every token access. This
+    // ensures profile changes (unitPreference, displayName, isAdmin) take
+    // effect immediately without requiring re-login.
+    async jwt({ token, user }) {
+      if (user?.id) {
+        // Sign-in: populate token from authorize() return value.
+        token.id = user.id;
+        token.unitPreference = user.unitPreference;
+        token.isAdmin = user.isAdmin;
+        return token;
+      }
+      // Subsequent accesses: refresh mutable fields so DB changes are live.
+      if (token.id) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id },
+          select: { unitPreference: true, displayName: true, isAdmin: true },
+        });
+        if (dbUser) {
+          token.unitPreference = dbUser.unitPreference as UnitPreference;
+          token.name = dbUser.displayName;
+          token.isAdmin = dbUser.isAdmin;
+        }
+      }
+      return token;
+    },
+  },
   providers: [
     Credentials({
       credentials: {
