@@ -43,7 +43,14 @@ roadmap (§11).** This file is the quick-start; SPEC.md is the source of truth.
   drag-and-drop exercise picker reuse, rest timer countdown with skip, per-set weight/reps inputs with unit conversion, 
   RPE 1-10 effort grid + notes on completion, session summary view (read-only), all Zod-validated, rate-limited (30/5min), 
   userId-scoped. Dashboard + workout detail pages updated with "Start Session" buttons (pre-populate workout/plan/date).
-- Next up: **Milestone 7** — goals + body metrics (three goal types, metric logging, progress computation).
+- **Milestone 7 (goals + body metrics + onboarding): DONE & verified** — 4 server actions for goals (`create`, `update`, 
+  `setStatus`, `delete`) + 2 for body metrics (`log`, `delete`), 1 onboarding action. 5 UI components (goal form/card, metric 
+  form/list, onboarding form). 9 pages (onboarding, metrics/list/new, goals/list/new/detail/edit). Goals support three types 
+  (STRENGTH via Epley 1RM estimation, BODY_METRIC with direction-aware progress, CONSISTENCY via session count), all with 
+  automatic progress computation. Body metrics logged over time with unit conversion (kg↔lbs, cm↔in). Post-registration 
+  onboarding captures initial bodyweight + optional first goal in single-page flow. Dashboard shows current weight + active 
+  goals. All rate-limited (30/5min), userId-scoped, Zod-validated.
+- Next up: **Milestone 8** — analytics/dashboard (progression charts, PRs, adherence, muscle volume, home feed).
 - Remaining domain sections still render `<ComingSoon milestone="…" />` placeholder.
 
 ## Stack (note the versions — several have breaking changes vs. older training data)
