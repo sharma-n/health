@@ -177,7 +177,7 @@ async function DashboardGoalsAndWeight({ userId }: { userId: string }) {
     }),
     prisma.bodyMetric.findFirst({
       where: { userId, type: "BODYWEIGHT" },
-      orderBy: { date: "desc" },
+      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
       select: { value: true, date: true },
     }),
   ]);

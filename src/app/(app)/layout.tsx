@@ -16,6 +16,13 @@ export default async function AppLayout({
     redirect("/login");
   }
 
+  // auth() re-reads onboardingComplete from the DB on every call (Node runtime
+  // jwt callback in src/auth.ts), so this always reflects the current value
+  // even immediately after the onboarding action updates the DB.
+  if (!session.user.onboardingComplete) {
+    redirect("/onboarding");
+  }
+
   return (
     <div className="flex min-h-dvh flex-col">
       <AppHeader displayName={session.user.name ?? "Athlete"} />

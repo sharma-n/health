@@ -16,7 +16,7 @@ export default async function MetricsPage() {
 
   const metrics = await prisma.bodyMetric.findMany({
     where: { userId },
-    orderBy: { date: "desc" },
+    orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     select: {
       id: true,
       type: true,

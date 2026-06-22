@@ -23,7 +23,11 @@ export async function completeOnboardingAction(
   // Parse form data; convert goal JSON if present
   const parsed = onboardingSchema.safeParse({
     bodyweightKg: formData.get("bodyweightKg") === "" ? null : formData.get("bodyweightKg"),
-    goal: formData.get("goal") ? JSON.parse(formData.get("goal") as string) : undefined,
+    goal: (() => {
+      const raw = formData.get("goal");
+      if (!raw || typeof raw !== "string" || raw.trim() === "") return undefined;
+      try { return JSON.parse(raw); } catch { return undefined; }
+    })(),
   });
 
   if (!parsed.success) {

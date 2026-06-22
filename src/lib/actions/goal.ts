@@ -174,7 +174,7 @@ export async function setGoalStatusAction(
     return { error: "Failed to update goal status. Please try again." };
   }
 
-  return {};
+  redirect(`/goals/${goalId}`);
 }
 
 export async function deleteGoalAction(

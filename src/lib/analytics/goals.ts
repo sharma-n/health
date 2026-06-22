@@ -111,7 +111,7 @@ async function computeBodyMetricGoalProgress(
       userId: goal.userId,
       type: metricType,
     },
-    orderBy: { date: "desc" },
+    orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     select: { value: true },
   });
 

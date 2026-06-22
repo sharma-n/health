@@ -202,13 +202,14 @@ model SessionSet {
 /// A body measurement over time. value is kg for BODYWEIGHT, cm for lengths,
 /// % for BODY_FAT_PCT.
 model BodyMetric {
-  id     String   @id @default(cuid())
-  userId String
-  date   DateTime
+  id        String   @id @default(cuid())
+  userId    String
+  date      DateTime
   /// One of BODY_METRIC_TYPES — validated by Zod.
-  type   String
-  value  Float
-  note   String?
+  type      String
+  value     Float
+  note      String?
+  createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

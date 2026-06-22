@@ -29,22 +29,6 @@ export const authConfig = {
         return true;
       }
 
-      // Onboarding page: only new users.
-      const isOnboardingPage = nextUrl.pathname === "/onboarding";
-      if (isLoggedIn) {
-        if (isOnboardingPage) {
-          // If already completed onboarding, bounce to dashboard.
-          if (auth.user.onboardingComplete) {
-            return Response.redirect(new URL("/dashboard", nextUrl));
-          }
-          // Otherwise allow access to onboarding.
-          return true;
-        } else if (!auth.user.onboardingComplete) {
-          // Not on onboarding page, but onboarding not complete: redirect.
-          return Response.redirect(new URL("/onboarding", nextUrl));
-        }
-      }
-
       // Admin area: requires an admin session. This is the cheap edge gate
       // (JWT can be stale up to 30 days); every admin server action re-checks
       // isAdmin against the DB. Non-admins are bounced to the dashboard.

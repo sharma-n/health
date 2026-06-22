@@ -5,7 +5,7 @@ import { ChevronLeft } from "lucide-react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { computeGoalProgress } from "@/lib/analytics/goals";
-import { GOAL_STATUSES } from "@/lib/constants";
+import { GoalDetailActions } from "@/components/goals/goal-detail-actions";
 
 export const metadata: Metadata = { title: "Goal — Health" };
 
@@ -26,6 +26,13 @@ function displayConfigValue(goal: any): string {
   }
   return "";
 }
+
+const STATUS_STYLES: Record<string, string> = {
+  ACTIVE:   "bg-primary/10 text-primary",
+  ACHIEVED: "bg-success/10 text-success",
+  FAILED:   "bg-danger/10 text-danger",
+  ARCHIVED: "bg-muted text-muted-foreground",
+};
 
 export default async function GoalDetailPage(props: Props) {
   const params = await props.params;
@@ -58,12 +65,17 @@ export default async function GoalDetailPage(props: Props) {
       </Link>
 
       <div className="space-y-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{goal.title}</h1>
-          <p className="text-sm text-muted-foreground mt-1">{goal.type}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">{goal.title}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{goal.type}</p>
+          </div>
+          <span className={`shrink-0 mt-1 px-2 py-1 rounded-full text-xs font-semibold ${STATUS_STYLES[goal.status] ?? "bg-muted text-muted-foreground"}`}>
+            {goal.status}
+          </span>
         </div>
 
-        {/* Progress bar */}
+        {/* Progress */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-foreground">Progress</span>
@@ -72,7 +84,7 @@ export default async function GoalDetailPage(props: Props) {
           <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
             <div
               className="h-full bg-primary transition-all"
-              style={{ width: `${progress.percentage}%` }}
+              style={{ width: `${Math.min(100, progress.percentage)}%` }}
             />
           </div>
         </div>
@@ -93,21 +105,6 @@ export default async function GoalDetailPage(props: Props) {
               {progress.target.toFixed(2)} {progress.unit}
             </span>
           </div>
-        </div>
-
-        {/* Config details */}
-        <div className="rounded-[var(--radius-app)] border border-border bg-surface p-4">
-          <p className="text-sm text-muted-foreground">{displayConfigValue(goal)}</p>
-        </div>
-
-        {/* Status and actions */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-foreground">Status</span>
-            <span className="px-2 py-1 rounded-full bg-muted text-sm font-medium text-foreground">
-              {goal.status}
-            </span>
-          </div>
           {goal.targetDate && (
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Target Date</span>
@@ -118,13 +115,22 @@ export default async function GoalDetailPage(props: Props) {
           )}
         </div>
 
+        {/* Config details */}
+        <div className="rounded-[var(--radius-app)] border border-border bg-surface p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Details</p>
+          <p className="text-sm text-foreground">{displayConfigValue(goal)}</p>
+        </div>
+
         {/* Edit button */}
         <Link
           href={`/goals/${goal.id}/edit`}
-          className="block w-full h-11 rounded-[var(--radius-app)] bg-primary text-center leading-11 font-medium text-primary-foreground transition-opacity hover:opacity-90"
+          className="flex h-11 w-full items-center justify-center rounded-[var(--radius-app)] bg-primary font-medium text-primary-foreground transition-opacity hover:opacity-90"
         >
           Edit Goal
         </Link>
+
+        {/* Status transitions + delete */}
+        <GoalDetailActions goalId={goal.id} currentStatus={goal.status} />
       </div>
     </div>
   );

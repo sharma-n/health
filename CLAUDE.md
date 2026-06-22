@@ -44,12 +44,17 @@ roadmap (§11).** This file is the quick-start; SPEC.md is the source of truth.
   RPE 1-10 effort grid + notes on completion, session summary view (read-only), all Zod-validated, rate-limited (30/5min), 
   userId-scoped. Dashboard + workout detail pages updated with "Start Session" buttons (pre-populate workout/plan/date).
 - **Milestone 7 (goals + body metrics + onboarding): DONE & verified** — 4 server actions for goals (`create`, `update`, 
-  `setStatus`, `delete`) + 2 for body metrics (`log`, `delete`), 1 onboarding action. 5 UI components (goal form/card, metric 
-  form/list, onboarding form). 9 pages (onboarding, metrics/list/new, goals/list/new/detail/edit). Goals support three types 
-  (STRENGTH via Epley 1RM estimation, BODY_METRIC with direction-aware progress, CONSISTENCY via session count), all with 
-  automatic progress computation. Body metrics logged over time with unit conversion (kg↔lbs, cm↔in). Post-registration 
-  onboarding captures initial bodyweight + optional first goal in single-page flow. Dashboard shows current weight + active 
-  goals. All rate-limited (30/5min), userId-scoped, Zod-validated.
+  `setStatus`, `delete`) + 2 for body metrics (`log`, `delete`), 1 onboarding action. 6 UI components (goal form/card/detail-actions,
+  metric form/list, onboarding form). 9 pages (onboarding, metrics/list/new, goals/list/new/detail/edit). Goals support three types
+  (STRENGTH via Epley 1RM estimation, BODY_METRIC with direction-aware progress, CONSISTENCY via session count), all with
+  automatic progress computation; detail page has status transitions (ACHIEVED/FAILED/ARCHIVED/Reactivate) and delete. Body metrics
+  logged over time with unit conversion (kg↔lbs, cm↔in); `BodyMetric` has `createdAt` for stable same-day ordering. Post-registration
+  onboarding captures initial bodyweight + optional first goal in single-page flow. Dashboard shows current weight + active goals.
+  All rate-limited (30/5min), userId-scoped, Zod-validated.
+  **Key architectural note:** the `/onboarding` page lives in `src/app/(setup)/` (not `(app)/`) — this is intentional. The edge
+  middleware (`auth.config.ts`) cannot check `onboardingComplete` reliably (JWT is stale after the action updates the DB), so the
+  gate is enforced in `(app)/layout.tsx` via the Node-runtime `auth()` which re-reads from DB on every call. The `(setup)` group
+  keeps the onboarding page outside the `(app)` layout to avoid a redirect loop.
 - Next up: **Milestone 8** — analytics/dashboard (progression charts, PRs, adherence, muscle volume, home feed).
 - Remaining domain sections still render `<ComingSoon milestone="…" />` placeholder.
 
@@ -131,9 +136,10 @@ schemas in `src/lib/validation/admin.ts`, UI under `src/app/(app)/admin/` +
 ```
 src/
   app/
-    (auth)/ login, register        # public, centered-card layout
-    (app)/  dashboard, exercises, workouts, plans, sessions, metrics,
-            goals, analytics, more, profile, admin   # authed shell (header + BottomNav)
+    (auth)/  login, register        # public, centered-card layout
+    (setup)/ onboarding             # logged-in but pre-onboarding; no nav bar (see M7 note above)
+    (app)/   dashboard, exercises, workouts, plans, sessions, metrics,
+             goals, analytics, more, profile, admin   # authed shell (header + BottomNav)
     api/auth/[...nextauth]/route.ts
     page.tsx                       # redirects -> /dashboard
   components/  auth/, admin/, ui/, app-shell/ (header, bottom-nav, page-header, coming-soon)

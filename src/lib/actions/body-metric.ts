@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { bodyMetricSchema } from "@/lib/validation/body-metric";
@@ -57,7 +58,8 @@ export async function logBodyMetricAction(
   }
 
   revalidatePath("/metrics");
-  return {};
+  revalidatePath("/dashboard");
+  redirect("/metrics");
 }
 
 export async function deleteBodyMetricAction(
@@ -99,5 +101,6 @@ export async function deleteBodyMetricAction(
   }
 
   revalidatePath("/metrics");
+  revalidatePath("/dashboard");
   return {};
 }
