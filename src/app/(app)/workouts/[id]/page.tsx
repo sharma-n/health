@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/app-shell/page-header";
 import { WorkoutDeleteForm } from "@/components/workouts/workout-delete-form";
 import { startSessionAction } from "@/lib/actions/session";
 import type { MuscleGroup } from "@/lib/constants";
+import { BodyMap } from "@/components/ui/body-map";
 
 const MUSCLE_LABELS: Record<MuscleGroup, string> = {
   CHEST: "Chest",
@@ -107,6 +108,12 @@ export default async function WorkoutDetailPage({
 
   if (!workout || workout.ownerId !== userId) notFound();
 
+  const muscleCounts: Partial<Record<MuscleGroup, number>> = {};
+  for (const we of workout.exercises) {
+    const muscles = parseMuscles(we.exercise.primaryMuscles);
+    for (const m of muscles) muscleCounts[m] = (muscleCounts[m] ?? 0) + 1;
+  }
+
   const unitPreference = session.user.unitPreference;
   const weightUnit = unitPreference === "KG" ? "kg" : "lbs";
   const convertWeight = (kg: number | null): number | null => {
@@ -200,6 +207,15 @@ export default async function WorkoutDetailPage({
         ) : (
           <div className="rounded-[var(--radius-app)] border-2 border-dashed border-border bg-surface/50 p-6 text-center">
             <p className="text-sm text-muted-foreground">No exercises in this workout.</p>
+          </div>
+        )}
+
+        {Object.keys(muscleCounts).length > 0 && (
+          <div className="rounded-[var(--radius-app)] border border-border bg-surface p-4">
+            <p className="mb-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Muscles targeted
+            </p>
+            <BodyMap muscleIntensity={muscleCounts} />
           </div>
         )}
 

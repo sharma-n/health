@@ -7,8 +7,9 @@ import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { SessionLogger } from "@/components/sessions/session-logger";
 import { SessionDeleteForm } from "@/components/sessions/session-delete-form";
-import type { UnitPreference } from "@/lib/constants";
+import type { MuscleGroup, UnitPreference } from "@/lib/constants";
 import { fromKg, weightUnitLabel } from "@/lib/units";
+import { BodyMap } from "@/components/ui/body-map";
 
 export async function generateMetadata({
   params,
@@ -93,7 +94,7 @@ export default async function SessionDetailPage({
           id: true,
           exerciseId: true,
           order: true,
-          exercise: { select: { id: true, name: true } },
+          exercise: { select: { id: true, name: true, primaryMuscles: true } },
           sets: {
             select: {
               id: true,
@@ -158,6 +159,16 @@ export default async function SessionDetailPage({
   // Completed session — static summary view
   const title = sessionData.workout?.name ?? "Ad-hoc session";
 
+  const muscleSets: Partial<Record<MuscleGroup, number>> = {};
+  for (const ex of sessionData.exercises) {
+    const completedCount = ex.sets.filter((s) => s.completed).length;
+    if (completedCount === 0) continue;
+    const muscles = Array.isArray(ex.exercise.primaryMuscles)
+      ? (ex.exercise.primaryMuscles as MuscleGroup[])
+      : [];
+    for (const m of muscles) muscleSets[m] = (muscleSets[m] ?? 0) + completedCount;
+  }
+
   return (
     <div>
       <PageHeader title={title} description={formatDateTime(sessionData.startedAt)} />
@@ -189,6 +200,16 @@ export default async function SessionDetailPage({
             </div>
           )}
         </div>
+
+        {/* Muscle heatmap */}
+        {Object.keys(muscleSets).length > 0 && (
+          <div className="rounded-[var(--radius-app)] border border-border bg-surface p-4">
+            <p className="mb-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Muscles worked
+            </p>
+            <BodyMap muscleIntensity={muscleSets} />
+          </div>
+        )}
 
         {/* Notes */}
         {sessionData.notes && (

@@ -24,6 +24,7 @@
     "next": "16.2.9",
     "next-auth": "^5.0.0-beta.31",
     "react": "19.2.4",
+    "react-body-highlighter": "^2.0.5",
     "react-dom": "19.2.4",
     "recharts": "^3.8.1",
     "zod": "^4.4.3"

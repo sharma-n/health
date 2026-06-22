@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { ExerciseActions } from "@/components/exercises/exercise-actions";
 import type { Equipment, MuscleGroup } from "@/lib/constants";
+import { BodyMap } from "@/components/ui/body-map";
 
 const EQUIPMENT_LABELS: Record<Equipment, string> = {
   BARBELL: "Barbell",
@@ -89,6 +90,11 @@ export default async function ExerciseDetailPage({
 
   const primaryMuscles = parseMuscles(exercise.primaryMuscles);
   const secondaryMuscles = parseMuscles(exercise.secondaryMuscles);
+
+  const bodyMapIntensity: Partial<Record<MuscleGroup, number>> = {};
+  for (const m of primaryMuscles) bodyMapIntensity[m] = 3;
+  for (const m of secondaryMuscles) if (!bodyMapIntensity[m]) bodyMapIntensity[m] = 1;
+
   const hasRefs =
     exercise._count.workoutEntries > 0 || exercise._count.sessionEntries > 0;
 
@@ -172,6 +178,15 @@ export default async function ExerciseDetailPage({
             </div>
           ) : null}
         </div>
+
+        {(primaryMuscles.length > 0 || secondaryMuscles.length > 0) && (
+          <div className="rounded-[var(--radius-app)] border border-border bg-surface p-4">
+            <p className="mb-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Muscles targeted
+            </p>
+            <BodyMap muscleIntensity={bodyMapIntensity} maxIntensity={3} />
+          </div>
+        )}
 
         <ExerciseActions
           exercise={{

@@ -16,6 +16,7 @@ import { getAdherenceStats } from "@/lib/analytics/adherence";
 import { getPersonalRecords, PR_LABEL } from "@/lib/analytics/prs";
 import { getExerciseProgression, getTrainedExercises } from "@/lib/analytics/progression";
 import { getMuscleVolumeByWeek } from "@/lib/analytics/volume";
+import { MuscleMapOverview } from "@/components/analytics/muscle-map-overview";
 import { Trophy, TrendingUp } from "lucide-react";
 
 export const metadata: Metadata = { title: "Analytics — Health" };
@@ -157,6 +158,17 @@ async function OverviewTab({ userId }: { userId: string }) {
             />
           ))}
           <p className="text-[11px] text-muted-foreground">More</p>
+        </div>
+      </div>
+
+      <div>
+        <p className="text-sm font-semibold text-foreground mb-3">
+          Muscles worked — last 7 days
+        </p>
+        <div className="rounded-[var(--radius-app)] border border-border bg-surface p-4">
+          <Suspense fallback={<div className="h-48 animate-pulse rounded-md bg-muted" />}>
+            <MuscleMapOverview userId={userId} />
+          </Suspense>
         </div>
       </div>
     </div>
