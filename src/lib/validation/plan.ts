@@ -30,6 +30,12 @@ export const setPlanStatusSchema = z.object({
   status: z.enum(PLAN_STATUSES),
 });
 
+export const planIdSchema = z.object({ planId: z.string().min(1) });
+
+export const updatePlanSchema = planSchema.and(planIdSchema);
+
 export type PlanScheduleItemInput = z.infer<typeof planScheduleItemSchema>;
 export type PlanInput = z.infer<typeof planSchema>;
 export type SetPlanStatusInput = z.infer<typeof setPlanStatusSchema>;
+export type PlanIdInput = z.infer<typeof planIdSchema>;
+export type UpdatePlanInput = z.infer<typeof updatePlanSchema>;

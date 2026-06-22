@@ -32,7 +32,12 @@ roadmap (§11).** This file is the quick-start; SPEC.md is the source of truth.
   per-exercise targets (sets, reps, weight, rest, notes), superset grouping, and drag-reorderable
   exercises. Color-coded superset indicators on detail/builder views. Weight converts per user unit
   preference (kg ↔ lbs) at input/display boundaries.
-- Next up: **Milestone 5** — plans/routines (weekly schedule + date range, statuses, "today's workout").
+- **Milestone 5 (plans/routines): DONE & verified** — 4 server actions (`create`, `update`, `setPlanStatus`, `delete`),
+  5 UI components (`PlanCard`, `PlanList`, `PlanForm` with inline weekly schedule picker, `PlanDeleteForm`, `PlanStatusForm`),
+  4 pages (list/new/detail/edit), all Zod-validated, rate-limited (30/5min), userId-scoped. Plans are date-ranged weekly
+  schedules (Sun–Sat → workout) with status lifecycle DRAFT→ACTIVE→COMPLETED→ARCHIVED. Dashboard shows "Today's Workout"
+  card when an ACTIVE plan has a workout scheduled for the current weekday.
+- Next up: **Milestone 6** — live session logging (active-session UI, rest timer, set logging, completion + effort).
 - Remaining domain sections still render `<ComingSoon milestone="…" />` placeholder.
 
 ## Stack (note the versions — several have breaking changes vs. older training data)
