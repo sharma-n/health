@@ -7,7 +7,6 @@ import {
   PlusCircle,
   Ruler,
   Target,
-  LineChart,
   Play,
   ArrowRight,
   type LucideIcon,
@@ -18,6 +17,9 @@ import { PageHeader } from "@/components/app-shell/page-header";
 import { startSessionAction } from "@/lib/actions/session";
 import { GoalCard } from "@/components/goals/goal-card";
 import { computeGoalProgress } from "@/lib/analytics/goals";
+import { getDashboardStats } from "@/lib/analytics/dashboard";
+import { StatCard } from "@/components/analytics/stat-card";
+import { RecentPRs } from "@/components/analytics/recent-prs";
 
 export const metadata: Metadata = { title: "Home — Health" };
 
@@ -29,12 +31,6 @@ type Shortcut = {
 };
 
 const SHORTCUTS: Shortcut[] = [
-  {
-    href: "/sessions",
-    label: "Start a session",
-    description: "Log today's workout",
-    icon: PlusCircle,
-  },
   {
     href: "/plans",
     label: "Plans",
@@ -65,13 +61,21 @@ const SHORTCUTS: Shortcut[] = [
     description: "Weight & measurements",
     icon: Ruler,
   },
-  {
-    href: "/analytics",
-    label: "Analytics",
-    description: "Progress & PRs",
-    icon: LineChart,
-  },
 ];
+
+function greetingDescription(
+  streak: number,
+  sessionsThisWeek: number,
+  totalCompleted: number,
+  firstName: string,
+): string {
+  if (totalCompleted === 0) return "Start your first session to begin your streak.";
+  if (streak === 0 && sessionsThisWeek === 0) return "Rest day — come back strong.";
+  if (streak >= 7) return `${streak}-day streak — you're on a roll, ${firstName}.`;
+  if (streak > 0) return `${streak}-day streak — keep it going.`;
+  if (sessionsThisWeek >= 3) return `${sessionsThisWeek} sessions this week — solid work.`;
+  return "Keep showing up — consistency compounds.";
+}
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -79,38 +83,73 @@ export default async function DashboardPage() {
   const firstName = (session?.user?.name ?? "Athlete").split(" ")[0];
 
   const now = new Date();
-  const dayOfWeek = now.getDay(); // local day of week, before any UTC normalization
-  // Build UTC midnight from local year/month/day so it matches how dates are stored
-  // (user enters "2026-06-22" → stored as 2026-06-22T00:00:00.000Z)
+  const dayOfWeek = now.getDay();
   const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
 
-  const todayOccurrence = userId
-    ? await prisma.planScheduleItem.findFirst({
-        where: {
-          plan: {
-            ownerId: userId,
-            status: "ACTIVE",
-            startDate: { lte: today },
-            endDate: { gte: today },
+  const [todayOccurrence, stats] = await Promise.all([
+    userId
+      ? prisma.planScheduleItem.findFirst({
+          where: {
+            plan: {
+              ownerId: userId,
+              status: "ACTIVE",
+              startDate: { lte: today },
+              endDate: { gte: today },
+            },
+            dayOfWeek,
           },
-          dayOfWeek,
-        },
-        select: {
-          workout: { select: { id: true, name: true } },
-          plan: { select: { id: true, name: true } },
-        },
-      })
-    : null;
+          select: {
+            workout: { select: { id: true, name: true } },
+            plan: { select: { id: true, name: true } },
+          },
+        })
+      : null,
+    userId ? getDashboardStats(userId, prisma) : null,
+  ]);
+
+  const description = stats
+    ? greetingDescription(
+        stats.currentStreak,
+        stats.sessionsThisWeek,
+        stats.totalCompleted,
+        firstName,
+      )
+    : "Your training home.";
 
   return (
     <div>
-      <PageHeader
-        title={`Hi, ${firstName}`}
-        description="Your training home. Build the app one milestone at a time."
-      />
+      <PageHeader title={`Hi, ${firstName}`} description={description} />
 
+      {/* Stats row */}
+      {stats && (
+        <div className="grid grid-cols-3 gap-2 mb-5">
+          <StatCard
+            label="Streak"
+            value={`${stats.currentStreak}d`}
+            sub={stats.currentStreak > 0 ? "in a row" : "start today"}
+            accent={stats.currentStreak >= 3 ? "emerald" : "default"}
+          />
+          <StatCard
+            label="This week"
+            value={stats.sessionsThisWeek}
+            sub={
+              stats.sessionsLastWeek > 0
+                ? `${stats.sessionsLastWeek} last wk`
+                : "sessions"
+            }
+            accent="blue"
+          />
+          <StatCard
+            label="All time"
+            value={stats.totalCompleted}
+            sub="completed"
+          />
+        </div>
+      )}
+
+      {/* Today's workout */}
       {todayOccurrence && (
-        <div className="mb-4 rounded-[var(--radius-app)] border border-emerald-500/40 bg-emerald-500/10 p-4">
+        <div className="mb-5 rounded-[var(--radius-app)] border border-emerald-500/40 bg-emerald-500/10 p-4">
           <div className="flex items-center justify-between gap-3 mb-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">
@@ -126,11 +165,7 @@ export default async function DashboardPage() {
           <form action={startSessionAction}>
             <input type="hidden" name="workoutId" value={todayOccurrence.workout.id} />
             <input type="hidden" name="planId" value={todayOccurrence.plan.id} />
-            <input
-              type="hidden"
-              name="scheduledDate"
-              value={today.toISOString()}
-            />
+            <input type="hidden" name="scheduledDate" value={today.toISOString()} />
             <button
               type="submit"
               className="flex w-full items-center justify-center gap-1.5 rounded-md bg-emerald-600 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
@@ -142,27 +177,43 @@ export default async function DashboardPage() {
         </div>
       )}
 
+      {/* Recent PRs */}
+      {stats && stats.recentPRs.length > 0 && (
+        <RecentPRs prs={stats.recentPRs} />
+      )}
+
+      {/* Goals + weight */}
       {userId && <DashboardGoalsAndWeight userId={userId} />}
 
-      <div className="grid grid-cols-2 gap-3">
-        {SHORTCUTS.map((s) => {
-          const Icon = s.icon;
-          return (
-            <Link
-              key={s.href}
-              href={s.href}
-              className="group rounded-[var(--radius-app)] border border-border bg-surface p-4 transition-colors hover:border-primary/50"
-            >
-              <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-[var(--radius-app)] bg-surface-muted text-primary">
-                <Icon className="h-5 w-5" />
-              </span>
-              <p className="font-medium leading-tight">{s.label}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {s.description}
-              </p>
-            </Link>
-          );
-        })}
+      {/* Quick links */}
+      <div className="mt-5">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-sm font-semibold text-foreground">Quick access</p>
+          <Link
+            href="/sessions"
+            className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+          >
+            <PlusCircle className="h-3.5 w-3.5" /> Start session
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {SHORTCUTS.map((s) => {
+            const Icon = s.icon;
+            return (
+              <Link
+                key={s.href}
+                href={s.href}
+                className="group rounded-[var(--radius-app)] border border-border bg-surface p-4 transition-colors hover:border-primary/50"
+              >
+                <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-[var(--radius-app)] bg-surface-muted text-primary">
+                  <Icon className="h-5 w-5" />
+                </span>
+                <p className="font-medium leading-tight">{s.label}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{s.description}</p>
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -182,7 +233,6 @@ async function DashboardGoalsAndWeight({ userId }: { userId: string }) {
     }),
   ]);
 
-  // Compute progress for active goals
   const goalsWithProgress = await Promise.all(
     activeGoals.map(async (goal) => {
       const progress = await computeGoalProgress(goal, prisma);
@@ -190,19 +240,19 @@ async function DashboardGoalsAndWeight({ userId }: { userId: string }) {
     }),
   );
 
-  if (goalsWithProgress.length === 0 && !latestWeight) {
-    return null;
-  }
+  if (goalsWithProgress.length === 0 && !latestWeight) return null;
 
   return (
-    <div className="mb-6 space-y-4">
+    <div className="mb-4 space-y-4">
       {latestWeight && (
         <div className="rounded-[var(--radius-app)] border border-border bg-surface p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
             Current Weight
           </p>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-foreground">{latestWeight.value.toFixed(1)}</span>
+            <span className="text-2xl font-bold text-foreground">
+              {latestWeight.value.toFixed(1)}
+            </span>
             <span className="text-sm text-muted-foreground">kg</span>
           </div>
           <p className="text-xs text-muted-foreground mt-1">
@@ -215,11 +265,12 @@ async function DashboardGoalsAndWeight({ userId }: { userId: string }) {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-foreground">Active Goals</p>
-            {goalsWithProgress.length >= 3 && (
-              <Link href="/goals" className="text-xs text-primary hover:underline flex items-center gap-1">
-                See all <ArrowRight className="h-3 w-3" />
-              </Link>
-            )}
+            <Link
+              href="/goals"
+              className="text-xs text-primary hover:underline flex items-center gap-1"
+            >
+              See all <ArrowRight className="h-3 w-3" />
+            </Link>
           </div>
           <div className="space-y-2">
             {goalsWithProgress.map((goal) => (

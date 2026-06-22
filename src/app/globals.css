@@ -10,6 +10,8 @@
   --primary: #2563eb;
   --primary-foreground: #ffffff;
   --danger: #dc2626;
+  --success: #16a34a;
+  --warning: #d97706;
   --radius: 0.75rem;
 }
 
@@ -23,6 +25,8 @@
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --radius-app: var(--radius);
@@ -39,6 +43,8 @@
     --primary: #3b82f6;
     --primary-foreground: #ffffff;
     --danger: #ef4444;
+  --success: #22c55e;
+  --warning: #f59e0b;
   }
 }
 

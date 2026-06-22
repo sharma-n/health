@@ -55,7 +55,8 @@ roadmap (§11).** This file is the quick-start; SPEC.md is the source of truth.
   middleware (`auth.config.ts`) cannot check `onboardingComplete` reliably (JWT is stale after the action updates the DB), so the
   gate is enforced in `(app)/layout.tsx` via the Node-runtime `auth()` which re-reads from DB on every call. The `(setup)` group
   keeps the onboarding page outside the `(app)` layout to avoid a redirect loop.
-- Next up: **Milestone 8** — analytics/dashboard (progression charts, PRs, adherence, muscle volume, home feed).
+- **Milestone 8 (analytics/dashboard): DONE & verified** — 5 analytics modules (`adherence`, `progression`, `prs`, `volume`, `dashboard`), 9 UI components (`StatCard`, `RecentPRs`, `AdherenceHeatmap`, `AdherenceBars`, `ProgressionChart`, `VolumeChart`, `MetricTrendChart`, `ExerciseSelector`, `MetricSelector`), full analytics page with 5 URL-param-driven tabs (Overview, Progression, Records, Volume, Body), dashboard revamped with stats row + dynamic greeting + recent PRs strip. Recharts installed. `--success`/`--warning` CSS tokens added (were missing but referenced by GoalCard). No migrations — pure computation + UI over existing data. All server-rendered; charts are `"use client"` Recharts components receiving serialised props.
+- Next up: **Milestone 9** — Docker Compose polish (entrypoint migrate+seed, env handling, backup docs, README).
 - Remaining domain sections still render `<ComingSoon milestone="…" />` placeholder.
 
 ## Stack (note the versions — several have breaking changes vs. older training data)
@@ -142,9 +143,11 @@ src/
              goals, analytics, more, profile, admin   # authed shell (header + BottomNav)
     api/auth/[...nextauth]/route.ts
     page.tsx                       # redirects -> /dashboard
-  components/  auth/, admin/, ui/, app-shell/ (header, bottom-nav, page-header, coming-soon)
+  components/  auth/, admin/, ui/, app-shell/ (header, bottom-nav, page-header, coming-soon),
+               analytics/ (stat-card, recent-prs, heatmap, bars, charts, selectors, tab-nav)
   lib/  db.ts, constants.ts, units.ts, actions/ (auth, admin), validation/ (auth, admin,
-        exercise, workout, plan, session, body-metric, goal)
+        exercise, workout, plan, session, body-metric, goal),
+        analytics/ (goals, adherence, progression, prs, volume, dashboard)
   generated/prisma/                # generated client (gitignored)
 prisma/  schema.prisma, migrations/, seed.ts
 ```
