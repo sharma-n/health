@@ -1,0 +1,16 @@
+services:
+  web:
+    build: .
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - db_data:/data
+    environment:
+      DATABASE_URL: "file:/data/app.db"
+      AUTH_SECRET: "${AUTH_SECRET:?Set AUTH_SECRET in .env}"
+      ALLOW_REGISTRATION: "${ALLOW_REGISTRATION:-true}"
+      PORT: "3000"
+    restart: unless-stopped
+
+volumes:
+  db_data:

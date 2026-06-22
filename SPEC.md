@@ -3,7 +3,7 @@
 > A self-hostable web application to **program and follow exercise routines toward a health goal**.
 > Define exercises → compose workouts → schedule them into dated plans → log live sessions → track progress and analytics.
 
-**Status:** Living document — updated as milestones land. Milestone 8 (analytics/dashboard) complete.
+**Status:** Living document — updated as milestones land. Milestone 9 (Docker Compose) complete — all major features shipped.
 **Last updated:** 2026-06-23
 
 ---
@@ -499,7 +499,7 @@ docker compose up -d    # migrations + seed run automatically on first boot
 6. **Live session logging — DONE** — active-session UI, rest timer, set logging, completion + effort.
 7. **Goals + body metrics** — three goal types, body-metric logging, progress computation.
 8. **Analytics/dashboard — DONE** — progression, PRs, adherence, muscle volume, home dashboard.
-9. **Docker Compose polish** — entrypoint migrate+seed, env handling, backup docs, README.
+9. **Docker Compose polish — DONE** — entrypoint migrate+seed, env handling, configurable host port, named volume for data.
 
 ---
 
