@@ -29,6 +29,22 @@ export const authConfig = {
         return true;
       }
 
+      // Onboarding page: only new users.
+      const isOnboardingPage = nextUrl.pathname === "/onboarding";
+      if (isLoggedIn) {
+        if (isOnboardingPage) {
+          // If already completed onboarding, bounce to dashboard.
+          if (auth.user.onboardingComplete) {
+            return Response.redirect(new URL("/dashboard", nextUrl));
+          }
+          // Otherwise allow access to onboarding.
+          return true;
+        } else if (!auth.user.onboardingComplete) {
+          // Not on onboarding page, but onboarding not complete: redirect.
+          return Response.redirect(new URL("/onboarding", nextUrl));
+        }
+      }
+
       // Admin area: requires an admin session. This is the cheap edge gate
       // (JWT can be stale up to 30 days); every admin server action re-checks
       // isAdmin against the DB. Non-admins are bounced to the dashboard.
@@ -43,22 +59,24 @@ export const authConfig = {
       // Everything else requires a session.
       return isLoggedIn;
     },
-    // Persist user id + unit preference + admin flag into the JWT.
+    // Persist user id + unit preference + admin flag + onboarding status into the JWT.
     jwt({ token, user }) {
       // `user` is only present on sign-in; our authorize() always sets id.
       if (user?.id) {
         token.id = user.id;
         token.unitPreference = user.unitPreference;
         token.isAdmin = user.isAdmin;
+        token.onboardingComplete = user.onboardingComplete;
       }
       return token;
     },
-    // Expose id + unit preference + admin flag on the session.
+    // Expose id + unit preference + admin flag + onboarding status on the session.
     session({ session, token }) {
       if (session.user) {
         session.user.id = token.id;
         session.user.unitPreference = token.unitPreference;
         session.user.isAdmin = token.isAdmin;
+        session.user.onboardingComplete = token.onboardingComplete;
       }
       return session;
     },

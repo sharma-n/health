@@ -82,11 +82,11 @@ export async function registerAction(
     throw error;
   }
 
-  // Auto sign-in; signIn redirects to /dashboard on success.
+  // Auto sign-in; signIn redirects to /onboarding on success.
   await signIn("credentials", {
     email,
     password,
-    redirectTo: "/dashboard",
+    redirectTo: "/onboarding",
   });
 
   return {};

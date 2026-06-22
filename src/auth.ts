@@ -13,7 +13,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     ...authConfig.callbacks,
     // Override the edge-safe jwt callback with a Node-runtime version that
     // re-reads mutable user fields from the DB on every token access. This
-    // ensures profile changes (unitPreference, displayName, isAdmin) take
+    // ensures profile changes (unitPreference, displayName, isAdmin, onboardingComplete) take
     // effect immediately without requiring re-login.
     async jwt({ token, user }) {
       if (user?.id) {
@@ -21,18 +21,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.id = user.id;
         token.unitPreference = user.unitPreference;
         token.isAdmin = user.isAdmin;
+        token.onboardingComplete = user.onboardingComplete;
         return token;
       }
       // Subsequent accesses: refresh mutable fields so DB changes are live.
       if (token.id) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.id },
-          select: { unitPreference: true, displayName: true, isAdmin: true },
+          select: { unitPreference: true, displayName: true, isAdmin: true, onboardingComplete: true },
         });
         if (dbUser) {
           token.unitPreference = dbUser.unitPreference as UnitPreference;
           token.name = dbUser.displayName;
           token.isAdmin = dbUser.isAdmin;
+          token.onboardingComplete = dbUser.onboardingComplete;
         }
       }
       return token;
@@ -58,6 +60,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             passwordHash: true,
             unitPreference: true,
             isAdmin: true,
+            onboardingComplete: true,
           },
         });
         if (!user) return null;
@@ -74,6 +77,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: user.displayName,
           unitPreference: user.unitPreference as UnitPreference,
           isAdmin: user.isAdmin,
+          onboardingComplete: user.onboardingComplete,
         };
       },
     }),

@@ -26,6 +26,8 @@ model User {
   /// The very first registered user is the admin (set at registration). Admins
   /// can manage other accounts via /admin. Never the default; see SPEC.md §8.
   isAdmin        Boolean  @default(false)
+  /// Post-registration onboarding (initial bodyweight + optional first goal) complete.
+  onboardingComplete Boolean @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

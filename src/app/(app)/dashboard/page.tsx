@@ -9,12 +9,15 @@ import {
   Target,
   LineChart,
   Play,
+  ArrowRight,
   type LucideIcon,
 } from "lucide-react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { startSessionAction } from "@/lib/actions/session";
+import { GoalCard } from "@/components/goals/goal-card";
+import { computeGoalProgress } from "@/lib/analytics/goals";
 
 export const metadata: Metadata = { title: "Home — Health" };
 
@@ -139,6 +142,8 @@ export default async function DashboardPage() {
         </div>
       )}
 
+      {userId && <DashboardGoalsAndWeight userId={userId} />}
+
       <div className="grid grid-cols-2 gap-3">
         {SHORTCUTS.map((s) => {
           const Icon = s.icon;
@@ -159,6 +164,70 @@ export default async function DashboardPage() {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+async function DashboardGoalsAndWeight({ userId }: { userId: string }) {
+  const [activeGoals, latestWeight] = await Promise.all([
+    prisma.goal.findMany({
+      where: { userId, status: "ACTIVE" },
+      take: 3,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.bodyMetric.findFirst({
+      where: { userId, type: "BODYWEIGHT" },
+      orderBy: { date: "desc" },
+      select: { value: true, date: true },
+    }),
+  ]);
+
+  // Compute progress for active goals
+  const goalsWithProgress = await Promise.all(
+    activeGoals.map(async (goal) => {
+      const progress = await computeGoalProgress(goal, prisma);
+      return { ...goal, progress };
+    }),
+  );
+
+  if (goalsWithProgress.length === 0 && !latestWeight) {
+    return null;
+  }
+
+  return (
+    <div className="mb-6 space-y-4">
+      {latestWeight && (
+        <div className="rounded-[var(--radius-app)] border border-border bg-surface p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+            Current Weight
+          </p>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-foreground">{latestWeight.value.toFixed(1)}</span>
+            <span className="text-sm text-muted-foreground">kg</span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            {new Date(latestWeight.date).toLocaleDateString()}
+          </p>
+        </div>
+      )}
+
+      {goalsWithProgress.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-foreground">Active Goals</p>
+            {goalsWithProgress.length >= 3 && (
+              <Link href="/goals" className="text-xs text-primary hover:underline flex items-center gap-1">
+                See all <ArrowRight className="h-3 w-3" />
+              </Link>
+            )}
+          </div>
+          <div className="space-y-2">
+            {goalsWithProgress.map((goal) => (
+              <GoalCard key={goal.id} goal={goal} progress={goal.progress} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -7,12 +7,14 @@ declare module "next-auth" {
       id: string;
       unitPreference: UnitPreference;
       isAdmin: boolean;
+      onboardingComplete: boolean;
     } & DefaultSession["user"];
   }
 
   interface User {
     unitPreference: UnitPreference;
     isAdmin: boolean;
+    onboardingComplete: boolean;
   }
 }
 
@@ -23,5 +25,6 @@ declare module "@auth/core/jwt" {
     id: string;
     unitPreference: UnitPreference;
     isAdmin: boolean;
+    onboardingComplete: boolean;
   }
 }
