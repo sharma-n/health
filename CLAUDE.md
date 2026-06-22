@@ -56,6 +56,7 @@ roadmap (§11).** This file is the quick-start; SPEC.md is the source of truth.
   gate is enforced in `(app)/layout.tsx` via the Node-runtime `auth()` which re-reads from DB on every call. The `(setup)` group
   keeps the onboarding page outside the `(app)` layout to avoid a redirect loop.
 - **Milestone 8 (analytics/dashboard): DONE & verified** — 5 analytics modules (`adherence`, `progression`, `prs`, `volume`, `dashboard`), 9 UI components (`StatCard`, `RecentPRs`, `AdherenceHeatmap`, `AdherenceBars`, `ProgressionChart`, `VolumeChart`, `MetricTrendChart`, `ExerciseSelector`, `MetricSelector`), full analytics page with 5 URL-param-driven tabs (Overview, Progression, Records, Volume, Body), dashboard revamped with stats row + dynamic greeting + recent PRs strip. Recharts installed. `--success`/`--warning` CSS tokens added (were missing but referenced by GoalCard). No migrations — pure computation + UI over existing data. All server-rendered; charts are `"use client"` Recharts components receiving serialised props.
+- **Muscle body heatmap visualization (post-M8): DONE** — SVG front + back body views using `react-body-highlighter` (npm), displayed across 4 locations: (1) exercise detail highlighting primary/secondary muscles, (2) workout detail showing intensity by exercise count, (3) completed session showing intensity by completed sets, (4) analytics Overview tab displaying last 7 days of muscle work. Shared `BodyMap` component maps app MuscleGroup constants to library muscle strings. `getMuscleRecentVolume()` analytics function. No migrations — pure UI layer over existing data. Build passes TypeScript.
 - Next up: **Milestone 9** — Docker Compose polish (entrypoint migrate+seed, env handling, backup docs, README).
 - Remaining domain sections still render `<ComingSoon milestone="…" />` placeholder.
 
@@ -65,6 +66,7 @@ roadmap (§11).** This file is the quick-start; SPEC.md is the source of truth.
 - **Prisma 7** over **SQLite** via the **`better-sqlite3` driver adapter**
 - **Auth.js / NextAuth v5 (beta)** — Credentials, JWT sessions, `bcryptjs`
 - **Tailwind v4** (CSS-config in `globals.css`, no `tailwind.config`), **Zod 4**, **lucide-react**
+- **Recharts** (interactive charts) + **react-body-highlighter** (SVG muscle body visualization)
 
 ## Environment gotchas (important — these cost time if forgotten)
 
@@ -143,11 +145,11 @@ src/
              goals, analytics, more, profile, admin   # authed shell (header + BottomNav)
     api/auth/[...nextauth]/route.ts
     page.tsx                       # redirects -> /dashboard
-  components/  auth/, admin/, ui/, app-shell/ (header, bottom-nav, page-header, coming-soon),
-               analytics/ (stat-card, recent-prs, heatmap, bars, charts, selectors, tab-nav)
+  components/  auth/, admin/, ui/ (body-map), app-shell/ (header, bottom-nav, page-header, coming-soon),
+               analytics/ (stat-card, recent-prs, heatmap, bars, charts, selectors, tab-nav, muscle-map-overview)
   lib/  db.ts, constants.ts, units.ts, actions/ (auth, admin), validation/ (auth, admin,
         exercise, workout, plan, session, body-metric, goal),
-        analytics/ (goals, adherence, progression, prs, volume, dashboard)
+        analytics/ (goals, adherence, progression, prs, volume, dashboard, muscle-recent)
   generated/prisma/                # generated client (gitignored)
 prisma/  schema.prisma, migrations/, seed.ts
 ```
