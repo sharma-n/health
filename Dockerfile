@@ -9,6 +9,8 @@ RUN npm ci
 # Stage 2: builder — build Next.js
 FROM node:24-alpine AS builder
 WORKDIR /app
+ENV DATABASE_URL="file:./build.db"
+ENV AUTH_SECRET="build-secret-do-not-use-in-production"
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 COPY --from=deps /app/src/generated ./src/generated
@@ -32,10 +34,11 @@ COPY --from=builder /app/next.config.ts ./
 COPY --from=builder /app/prisma.config.ts ./
 COPY --from=builder /app/tsconfig.json ./
 COPY --from=builder /app/postcss.config.mjs ./
-
-# Copy entrypoint script
-COPY docker/entrypoint.sh ./
+COPY --from=builder /app/docker ./docker
 RUN chmod +x ./docker/entrypoint.sh
+
+# Create /data directory and set permissions for volume mount
+RUN mkdir -p /data && chown -R nextjs:nodejs /data
 
 # Change ownership to nextjs user
 RUN chown -R nextjs:nodejs /app
