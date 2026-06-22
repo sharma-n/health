@@ -39,8 +39,15 @@ export const completeSessionSchema = z.object({
   notes: z.string().trim().max(2000).nullable().optional(),
 });
 
+// Add an exercise to an in-progress session (ad-hoc or mid-session add).
+export const addExerciseToSessionSchema = z.object({
+  sessionId: z.string().cuid(),
+  exerciseId: z.string().cuid(),
+});
+
 export type StartSessionInput = z.infer<typeof startSessionSchema>;
 export type SessionSetInput = z.infer<typeof sessionSetSchema>;
 export type UpsertSetInput = z.infer<typeof upsertSetSchema>;
 export type SetRestInput = z.infer<typeof setRestSchema>;
 export type CompleteSessionInput = z.infer<typeof completeSessionSchema>;
+export type AddExerciseToSessionInput = z.infer<typeof addExerciseToSessionSchema>;

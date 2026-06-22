@@ -1,12 +1,13 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Edit } from "lucide-react";
+import { Edit, Play } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { WorkoutDeleteForm } from "@/components/workouts/workout-delete-form";
+import { startSessionAction } from "@/lib/actions/session";
 import type { MuscleGroup } from "@/lib/constants";
 
 const MUSCLE_LABELS: Record<MuscleGroup, string> = {
@@ -117,13 +118,25 @@ export default async function WorkoutDetailPage({
     <div>
       <div className="mb-5 flex items-center justify-between gap-3">
         <PageHeader title={workout.name} />
-        <Link
-          href={`/workouts/${workout.id}/edit`}
-          className="flex h-9 shrink-0 items-center gap-1.5 rounded-[var(--radius-app)] bg-primary px-3 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-        >
-          <Edit className="h-4 w-4" />
-          Edit
-        </Link>
+        <div className="flex shrink-0 items-center gap-2">
+          <form action={startSessionAction}>
+            <input type="hidden" name="workoutId" value={workout.id} />
+            <button
+              type="submit"
+              className="flex h-9 items-center gap-1.5 rounded-[var(--radius-app)] bg-emerald-600 px-3 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            >
+              <Play className="h-4 w-4" />
+              Start
+            </button>
+          </form>
+          <Link
+            href={`/workouts/${workout.id}/edit`}
+            className="flex h-9 items-center gap-1.5 rounded-[var(--radius-app)] bg-primary px-3 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            <Edit className="h-4 w-4" />
+            Edit
+          </Link>
+        </div>
       </div>
 
       <div className="space-y-4">

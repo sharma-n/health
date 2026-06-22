@@ -37,7 +37,13 @@ roadmap (§11).** This file is the quick-start; SPEC.md is the source of truth.
   4 pages (list/new/detail/edit), all Zod-validated, rate-limited (30/5min), userId-scoped. Plans are date-ranged weekly
   schedules (Sun–Sat → workout) with status lifecycle DRAFT→ACTIVE→COMPLETED→ARCHIVED. Dashboard shows "Today's Workout"
   card when an ACTIVE plan has a workout scheduled for the current weekday.
-- Next up: **Milestone 6** — live session logging (active-session UI, rest timer, set logging, completion + effort).
+- **Milestone 6 (live session logging): DONE & verified** — 6 server actions (`startSession`, `addExerciseToSession`, 
+  `upsertSet`, `setRest`, `completeSession`, `deleteSession`), 5 UI components (`SessionCard`, `SessionLogger`, `RestTimer`, 
+  `SessionCompleteForm`, `SessionDeleteForm`), 3 pages (list/new/active-detail), one-exercise-at-a-time logger with 
+  drag-and-drop exercise picker reuse, rest timer countdown with skip, per-set weight/reps inputs with unit conversion, 
+  RPE 1-10 effort grid + notes on completion, session summary view (read-only), all Zod-validated, rate-limited (30/5min), 
+  userId-scoped. Dashboard + workout detail pages updated with "Start Session" buttons (pre-populate workout/plan/date).
+- Next up: **Milestone 7** — goals + body metrics (three goal types, metric logging, progress computation).
 - Remaining domain sections still render `<ComingSoon milestone="…" />` placeholder.
 
 ## Stack (note the versions — several have breaking changes vs. older training data)

@@ -8,11 +8,13 @@ import {
   Ruler,
   Target,
   LineChart,
+  Play,
   type LucideIcon,
 } from "lucide-react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/app-shell/page-header";
+import { startSessionAction } from "@/lib/actions/session";
 
 export const metadata: Metadata = { title: "Home — Health" };
 
@@ -105,21 +107,36 @@ export default async function DashboardPage() {
       />
 
       {todayOccurrence && (
-        <Link
-          href={`/workouts/${todayOccurrence.workout.id}`}
-          className="mb-4 flex items-center justify-between rounded-[var(--radius-app)] border border-emerald-500/40 bg-emerald-500/10 p-4 transition-colors hover:border-emerald-500/60"
-        >
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">
-              Today&rsquo;s Workout
-            </p>
-            <p className="mt-0.5 font-medium text-foreground">
-              {todayOccurrence.workout.name}
-            </p>
-            <p className="text-xs text-muted-foreground">{todayOccurrence.plan.name}</p>
+        <div className="mb-4 rounded-[var(--radius-app)] border border-emerald-500/40 bg-emerald-500/10 p-4">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">
+                Today&rsquo;s Workout
+              </p>
+              <p className="mt-0.5 font-medium text-foreground">
+                {todayOccurrence.workout.name}
+              </p>
+              <p className="text-xs text-muted-foreground">{todayOccurrence.plan.name}</p>
+            </div>
+            <CalendarDays className="h-5 w-5 text-emerald-600 shrink-0" />
           </div>
-          <CalendarDays className="h-5 w-5 text-emerald-600 shrink-0" />
-        </Link>
+          <form action={startSessionAction}>
+            <input type="hidden" name="workoutId" value={todayOccurrence.workout.id} />
+            <input type="hidden" name="planId" value={todayOccurrence.plan.id} />
+            <input
+              type="hidden"
+              name="scheduledDate"
+              value={today.toISOString()}
+            />
+            <button
+              type="submit"
+              className="flex w-full items-center justify-center gap-1.5 rounded-md bg-emerald-600 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            >
+              <Play className="h-4 w-4" />
+              Start Session
+            </button>
+          </form>
+        </div>
       )}
 
       <div className="grid grid-cols-2 gap-3">
