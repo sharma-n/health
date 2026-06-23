@@ -20,6 +20,12 @@ allow-direct-references = true
 [tool.hatch.build.targets.wheel]
 packages = ["src/health_agent"]
 
+[tool.uv]
+dev-dependencies = [
+  "pytest",
+  "pytest-asyncio",
+]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
