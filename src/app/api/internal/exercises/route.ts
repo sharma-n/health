@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateInternalRequest } from "../_auth";
 import { prisma } from "@/lib/db";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { exerciseSchema } from "@/lib/validation/exercise";
 
 export async function GET(req: NextRequest) {
   const auth = validateInternalRequest(req);
@@ -32,4 +34,52 @@ export async function GET(req: NextRequest) {
   });
 
   return NextResponse.json(exercises);
+}
+
+export async function POST(req: NextRequest) {
+  const auth = validateInternalRequest(req);
+  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { userId } = auth;
+
+  if (!checkRateLimit(`internal-write:${userId}`, 30, 5 * 60_000)) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const parsed = exerciseSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Validation failed", fieldErrors: parsed.error.flatten().fieldErrors },
+      { status: 400 },
+    );
+  }
+
+  const { name, description, equipment, primaryMuscles, secondaryMuscles, instructions, commonPitfalls } = parsed.data;
+
+  try {
+    const exercise = await prisma.exercise.create({
+      data: {
+        ownerId: userId,
+        isSystem: false,
+        isArchived: false,
+        name,
+        description,
+        equipment,
+        primaryMuscles,
+        secondaryMuscles,
+        instructions,
+        commonPitfalls,
+      },
+      select: { id: true },
+    });
+    return NextResponse.json({ id: exercise.id }, { status: 201 });
+  } catch {
+    return NextResponse.json({ error: "Failed to create exercise" }, { status: 500 });
+  }
 }

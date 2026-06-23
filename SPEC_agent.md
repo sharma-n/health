@@ -227,11 +227,29 @@ Routes reuse existing Zod validation schemas from `src/lib/validation/`. They wr
 3. `create_goal(title, type, target_date, config)`
 4. `log_body_metric(metric_type, value, date)`
 
+**Additional pre-M13 tool:** `get_workouts()` in `read_tools.py` — lists all saved workout templates (name, id, exercise count). Needed so the agent can resolve workout names → IDs when scheduling a plan, and so users can ask "what workouts do I have?"
+
 **Verification:** "Create a PPL split starting next Monday for 8 weeks" → agent proposes plan in text → user confirms → plan visible in `/plans`.
 
 ---
 
-### M14 — Memory & Personalization
+### M14 — Ad-hoc Session Logging
+
+Agent logs a one-off workout session (not tied to a saved template) — either designed from scratch or based on a modified existing workout.
+
+**Internal mutation route:**
+- `POST /api/internal/sessions` — `{ date, exercises: [{exerciseId, sets: [{weightKg, reps, rpe?}]}], workoutId?, planId?, notes? }`
+
+The route creates the session atomically: start → add exercises + sets → complete (sets `endedAt` and computes `durationSeconds`). `workoutId` is optional (already optional on the `Session` model).
+
+**Python write tool (`write_tools.py`):**
+- `log_session(exercises, date?, notes?, base_workout_name?)` — if `base_workout_name` is provided, fetches that workout's exercises as a starting template (using `get_workouts` + `GET /api/internal/workouts/{id}`), then applies any user modifications before posting
+
+**Verification:** "Log a quick upper body session from today — bench 3×8 at 80 kg, rows 3×10 at 60 kg" → agent confirms → session visible in `/sessions`.
+
+---
+
+### M15 — Memory & Personalization  *(formerly M14)*
 
 Agent remembers user facts across conversations; dashboard shows AI-generated insights.
 

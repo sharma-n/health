@@ -28,6 +28,7 @@ def get_read_tools() -> list[Tool]:
     return [
         _workout_history_tool(),
         _exercises_tool(),
+        _workouts_tool(),
         _active_plans_tool(),
         _goals_tool(),
         _personal_records_tool(),
@@ -137,6 +138,33 @@ def _exercises_tool() -> Tool:
                 },
                 "required": [],
             },
+        ),
+        handler=handler,
+    )
+
+
+def _workouts_tool() -> Tool:
+    async def handler(user_id: str, args: dict[str, Any]) -> str:
+        result = await _get(user_id, "/api/internal/workouts")
+        try:
+            data = json.loads(result)
+        except Exception:
+            return result
+        if not data:
+            return "No workout templates saved yet."
+        lines = ["Saved workout templates:"]
+        for w in data:
+            desc = f" — {w['description']}" if w.get("description") else ""
+            lines.append(
+                f"  - {w['name']} (id: {w['id']}, {w['exerciseCount']} exercises){desc}"
+            )
+        return "\n".join(lines)
+
+    return Tool(
+        definition=ToolDefinition(
+            name="get_workouts",
+            description="List all saved workout templates (name, id, exercise count). Use this before scheduling workouts in a plan or when the user asks what workouts they have.",
+            parameters={"type": "object", "properties": {}, "required": []},
         ),
         handler=handler,
     )

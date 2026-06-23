@@ -5,7 +5,7 @@ requires-python = ">=3.13"
 [[package]]
 name = "agent-kit"
 version = "0.1.0"
-source = { git = "https://github.com/sharma-n/agent_kit.git#f5b5b1f5246547a5589d1d3cf701e6c93f033bcd" }
+source = { git = "https://github.com/sharma-n/agent_kit.git#e003cfd9392cc7b331ca91856a2194c0bd7800aa" }
 dependencies = [
     { name = "fastapi" },
     { name = "llm-kit" },

@@ -30,6 +30,9 @@ class _LazyAsyncClient:
     async def post(self, *args, **kwargs):
         return await self._get().post(*args, **kwargs)
 
+    async def patch(self, *args, **kwargs):
+        return await self._get().patch(*args, **kwargs)
+
     async def aclose(self):
         if self._client is not None:
             await self._client.aclose()

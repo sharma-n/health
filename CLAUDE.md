@@ -74,6 +74,24 @@ roadmap (§11).** This file is the quick-start; SPEC.md is the source of truth.
   an active PPL plan, a bodyweight goal (80 → 75 kg), 2 body metric logs, and 4 completed
   sessions with progressive overload across 2 weeks. Idempotent — safe to re-run at any time.
   Requires system exercises to be seeded first (`npm run db:seed`).
+- **Pre-M13 gap fix: DONE** — `get_workouts` Python tool added to `read_tools.py` (wraps existing
+  `GET /api/internal/workouts`). Needed to list workout templates and resolve names → IDs for plan
+  scheduling. 3 new tests; `config.yaml` + system prompt updated. 299 JS tests passing.
+- **Milestone 13 (Write Tools): DONE & verified** — 4 internal POST routes (`workouts`, `plans`,
+  `goals`, `metrics`) using existing Zod schemas, rate-limited per userId (30/5min), userId-scoped,
+  with cross-user workoutId guard on plan creation. 4 Python write tools in `write_tools.py`:
+  `create_workout` (resolves exercise names → IDs), `create_training_plan` (resolves workout names
+  → IDs, maps day names → `dayOfWeek` ints), `create_goal` (all 3 types; STRENGTH resolves
+  exercise name → ID), `log_body_metric`. Write confirmation rule added to system prompt and
+  `config.yaml`. 21 new JS tests + 21 new Python tests; all pass (299 JS / 44 Python).
+  **Next milestone is M14 (Ad-hoc Session Logging) — see SPEC_agent.md.**
+- **create_exercise tool (post-M13): DONE** — `POST /api/internal/exercises` route added (same
+  auth + rate-limit + Zod pattern as other write routes). `create_exercise` Python write tool in
+  `write_tools.py` (name, equipment, primary_muscles required; description, secondary_muscles,
+  instructions, common_pitfalls optional). System prompt + `config.yaml` updated with explicit
+  rule: only call when the user explicitly asks to create a new exercise by name; during workout
+  creation, silently substitute via `get_exercises` instead of calling this tool. 12 new JS tests
+  + 6 new Python tests; all pass (311 JS / 50 Python).
 - Remaining domain sections still render `<ComingSoon milestone="…" />` placeholder.
 
 ## Stack (note the versions — several have breaking changes vs. older training data)
@@ -115,7 +133,7 @@ npm run db:dev-seed    # wipe all users + create demo account with sample data (
 npm run db:studio
 
 # Tests (run these before and after every change to catch regressions)
-npm run test               # all 278 tests (~7s)
+npm run test               # all 311 tests (~7s)
 npm run test:unit          # unit + validation + analytics only (~2s, no DB)
 npm run test:integration   # server action + scenario tests (~5s, in-memory DB)
 npm run test:watch         # re-run on file changes during development
@@ -175,10 +193,11 @@ src/
              goals, analytics, more, profile, admin   # authed shell (header + BottomNav)
     api/auth/[...nextauth]/route.ts
     api/agent/route.ts             # SSE proxy to Python sidecar (auth-gated)
-    api/internal/                  # internal data bridge (M11) — secret-gated, not NextAuth
+    api/internal/                  # internal data bridge (M11+) — secret-gated, not NextAuth
       _auth.ts                     # shared X-Internal-Secret + X-User-Id validator
-      sessions/ exercises/ workouts/ plans/ goals/route.ts
+      sessions/ exercises/ workouts/ plans/ goals/ metrics/route.ts
       analytics/ adherence/ prs/ progression/ muscle-volume/route.ts
+      # workouts, plans, goals, exercises also have POST handlers (M13+)
     page.tsx                       # redirects -> /dashboard
   components/  auth/, admin/, ui/ (body-map), app-shell/ (header, bottom-nav, page-header, coming-soon),
                analytics/ (stat-card, recent-prs, heatmap, bars, charts, selectors, tab-nav, muscle-map-overview)
@@ -192,12 +211,12 @@ agent_service/                     # Python sidecar (M10+)
   config.yaml                      # agent_kit config (LLM, memory, tools)
   src/health_agent/
     main.py service.py             # FastAPI + AgentService bootstrap
-    tools/ client.py read_tools.py coaching_tools.py  # httpx client + 8 M11 query tools + 4 M12 coaching tools
+    tools/ client.py read_tools.py coaching_tools.py write_tools.py  # httpx client + 9 read tools (M11+pre-M13) + 4 coaching tools (M12) + 6 write tools (M13+)
 ```
 
 ## Tests
 
-**Always run `npm run test` before committing and after any non-trivial change.** All 278 tests must pass; a red suite blocks merging. The tests are fast (~7s total) so there's no reason to skip them.
+**Always run `npm run test` before committing and after any non-trivial change.** All 311 tests must pass; a red suite blocks merging. The tests are fast (~7s total) so there's no reason to skip them.
 
 ### Structure
 

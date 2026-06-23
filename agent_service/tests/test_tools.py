@@ -1,4 +1,4 @@
-"""Tool tests — M10 smoke test + M12 coaching intelligence tests."""
+"""Tool tests — M10 smoke test + M12 coaching intelligence tests + pre-M13 get_workouts."""
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -6,6 +6,7 @@ import pytest
 
 from health_agent.service import build_service
 from health_agent.tools.coaching_tools import get_coaching_tools
+from health_agent.tools.read_tools import get_read_tools
 
 
 # ---------------------------------------------------------------------------
@@ -25,6 +26,11 @@ def _tool(name: str):
     return next(t for t in get_coaching_tools() if t.definition.name == name)
 
 
+def _read_tool(name: str):
+    """Return the named read tool handler."""
+    return next(t for t in get_read_tools() if t.definition.name == name)
+
+
 # ---------------------------------------------------------------------------
 # M10 smoke test
 # ---------------------------------------------------------------------------
@@ -41,10 +47,74 @@ def test_service_builds() -> None:
     tool_names = {t.definition.name for t in tools}
     assert "get_workout_history" in tool_names       # M11
     assert "get_muscle_volume" in tool_names          # M11
+    assert "get_workouts" in tool_names               # pre-M13
     assert "analyze_training_balance" in tool_names   # M12
     assert "assess_goal_trajectory" in tool_names     # M12
     assert "suggest_next_workout" in tool_names       # M12
     assert "get_training_summary" in tool_names       # M12
+    assert "create_workout" in tool_names             # M13
+    assert "create_training_plan" in tool_names       # M13
+    assert "create_goal" in tool_names                # M13
+    assert "log_body_metric" in tool_names            # M13
+    assert "update_goal" in tool_names                # post-M13
+    # Verify system_prompt_fn is wired
+    assert call_kwargs.kwargs.get("system_prompt_fn") is not None
+
+
+@pytest.mark.asyncio
+async def test_system_prompt_fn_returns_date_string() -> None:
+    """_system_prompt_fn returns a string with today's date and a weekday name."""
+    from datetime import date
+    from health_agent.service import _system_prompt_fn
+
+    result = await _system_prompt_fn("user1", "conv1")
+    today_iso = date.today().isoformat()
+    assert today_iso in result
+    # Should contain a weekday name
+    weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    assert any(day in result for day in weekdays)
+
+
+# ---------------------------------------------------------------------------
+# get_workouts (pre-M13)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_get_workouts_happy_path():
+    tool = _read_tool("get_workouts")
+    workouts = [
+        {"id": "w1", "name": "Push Day", "description": "Chest and triceps", "exerciseCount": 4},
+        {"id": "w2", "name": "Pull Day", "description": None, "exerciseCount": 3},
+    ]
+    with patch("health_agent.tools.read_tools.http_client") as mock_client:
+        mock_client.get = AsyncMock(return_value=_resp(workouts))
+        result = await tool.handler("user1", {})
+
+    assert "Push Day" in result
+    assert "w1" in result
+    assert "4 exercises" in result
+    assert "Pull Day" in result
+    assert "3 exercises" in result
+
+
+@pytest.mark.asyncio
+async def test_get_workouts_empty():
+    tool = _read_tool("get_workouts")
+    with patch("health_agent.tools.read_tools.http_client") as mock_client:
+        mock_client.get = AsyncMock(return_value=_resp([]))
+        result = await tool.handler("user1", {})
+
+    assert "No workout templates" in result
+
+
+@pytest.mark.asyncio
+async def test_get_workouts_http_error():
+    tool = _read_tool("get_workouts")
+    with patch("health_agent.tools.read_tools.http_client") as mock_client:
+        mock_client.get = AsyncMock(return_value=_resp({"error": "Unauthorized"}, status=401))
+        result = await tool.handler("user1", {})
+
+    assert "error 401" in result
 
 
 # ---------------------------------------------------------------------------

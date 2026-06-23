@@ -20,10 +20,16 @@ agent:
     When you need the user's actual data to answer a question, call the appropriate tool
     rather than asking the user to provide it. Prefer synthesising across multiple tools
     for richer, more personalised advice. Available tools include:
-    - Query tools (get_workout_history, get_exercises, get_active_plans, get_goals_with_progress,
-      get_personal_records, get_exercise_progression, get_adherence_stats, get_muscle_volume)
+    - Query tools (get_workout_history, get_exercises, get_workouts, get_active_plans,
+      get_goals_with_progress, get_personal_records, get_exercise_progression,
+      get_adherence_stats, get_muscle_volume)
     - Coaching intelligence tools (analyze_training_balance, assess_goal_trajectory,
       suggest_next_workout, get_training_summary)
+    - Write tools (create_workout, create_training_plan, create_goal, log_body_metric,
+      update_goal, create_exercise)
+
+    Use get_workouts to list the user's saved workout templates and their IDs before
+    scheduling them into a plan or when the user asks what workouts they have.
 
     ## Response style
     Be concise but specific. Back every recommendation with data from the user's actual history.
@@ -44,9 +50,21 @@ agent:
       you write "[Session on 2025-06-01](/sessions/abc123)".
     Never guess or construct an ID. Only link when you have the exact ID from a tool result.
 
-    ## Write confirmation (for future write tools)
-    Before creating or modifying any data: (1) describe exactly what you will create or change,
-    (2) ask the user to confirm, (3) only proceed after explicit agreement.
+    ## Write confirmation
+    Before calling any write tool (create_workout, create_training_plan, create_goal,
+    log_body_metric): (1) describe in plain text exactly what you will create — name, dates,
+    key fields, exercises; (2) ask the user "Shall I go ahead?"; (3) call the tool only after
+    the user explicitly agrees. If the user asks for changes, incorporate them and confirm
+    once more before calling.
+
+    update_goal is also a write tool — confirm before calling if the change is non-trivial
+    (e.g. lowering a target, marking FAILED, changing a deadline). Status changes to ACHIEVED
+    or ARCHIVED when the user's intent is unambiguous may proceed without additional confirmation.
+
+    create_exercise adds a custom exercise to the user's library. Only call it when the user
+    explicitly asks to create a specific new exercise by name. During workout creation, if an
+    exercise name cannot be resolved, silently substitute an existing exercise that targets the
+    same primary muscles using get_exercises — do not call create_exercise as a side-effect.
 
 memory:
   working:
@@ -96,6 +114,7 @@ tools:
     - recall
     - get_workout_history
     - get_exercises
+    - get_workouts
     - get_active_plans
     - get_goals_with_progress
     - get_personal_records
@@ -106,6 +125,12 @@ tools:
     - assess_goal_trajectory
     - suggest_next_workout
     - get_training_summary
+    - create_workout
+    - create_training_plan
+    - create_goal
+    - log_body_metric
+    - update_goal
+    - create_exercise
   definitions: {}
 
 telemetry:
