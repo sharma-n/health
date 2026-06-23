@@ -17,19 +17,15 @@ describe("computeGoalProgress — STRENGTH / 1RM (Epley formula)", () => {
     expect(r.current).toBeCloseTo(116.67, 1);
     expect(r.target).toBe(150);
     expect(r.unit).toBe("kg");
-    expect(r.percentage).toBeCloseTo((116.67 / 150) * 100, 0);
   });
 
   it("picks the maximum 1RM estimate across all sets", async () => {
-    // Set A: 80kg × (1+10/30) = 106.67
-    // Set B: 100kg × (1+3/30) = 110.0  ← winner
-    // Set C: 90kg × (1+8/30) = 114.0   ← actually winner
     const prisma = makePrisma({
       sessionSet: {
         findMany: vi.fn().mockResolvedValue([
           { weightKg: 80, reps: 10 },
           { weightKg: 100, reps: 3 },
-          { weightKg: 90, reps: 8 },
+          { weightKg: 90, reps: 8 }, // 90 × (1 + 8/30) = 114 — winner
         ]),
       },
     });
@@ -37,7 +33,6 @@ describe("computeGoalProgress — STRENGTH / 1RM (Epley formula)", () => {
       { userId: "u", type: "STRENGTH", config: { exerciseId: "ex", metric: "1RM", targetValueKg: 120 } },
       prisma,
     );
-    // 90 × (1 + 8/30) = 90 × 1.2667 = 114
     expect(r.current).toBeCloseTo(114, 0);
   });
 
@@ -62,6 +57,41 @@ describe("computeGoalProgress — STRENGTH / 1RM (Epley formula)", () => {
       prisma,
     );
     expect(r.percentage).toBe(100);
+  });
+
+  it("uses startingValueKg in the percentage formula when provided", async () => {
+    // set: 100kg×1rep → Epley 1RM = 100*(1+1/30) ≈ 103.33
+    // start=80, target=150 → (103.33-80)/(150-80) ≈ 33.3%
+    const prisma = makePrisma({
+      sessionSet: { findMany: vi.fn().mockResolvedValue([{ weightKg: 100, reps: 1 }]) },
+    });
+    const r = await computeGoalProgress(
+      {
+        userId: "u",
+        type: "STRENGTH",
+        config: { exerciseId: "ex", metric: "1RM", targetValueKg: 150, startingValueKg: 80 },
+      },
+      prisma,
+    );
+    const epley = 100 * (1 + 1 / 30);
+    expect(r.percentage).toBeCloseTo(((epley - 80) / (150 - 80)) * 100, 0);
+  });
+
+  it("falls back to current/target when startingValueKg is 0", async () => {
+    // set: 100kg×1rep → Epley 1RM ≈ 103.33; start=0 → 103.33/150 ≈ 68.9%
+    const prisma = makePrisma({
+      sessionSet: { findMany: vi.fn().mockResolvedValue([{ weightKg: 100, reps: 1 }]) },
+    });
+    const r = await computeGoalProgress(
+      {
+        userId: "u",
+        type: "STRENGTH",
+        config: { exerciseId: "ex", metric: "1RM", targetValueKg: 150, startingValueKg: 0 },
+      },
+      prisma,
+    );
+    const epley = 100 * (1 + 1 / 30);
+    expect(r.percentage).toBeCloseTo((epley / 150) * 100, 0);
   });
 });
 
@@ -96,37 +126,59 @@ describe("computeGoalProgress — STRENGTH / weightForReps", () => {
 });
 
 describe("computeGoalProgress — BODY_METRIC", () => {
-  it("computes percentage for an 'increase' direction goal", async () => {
+  it("decrease goal: 0% when at starting value (no progress yet)", async () => {
     const prisma = makePrisma({
-      bodyMetric: { findFirst: vi.fn().mockResolvedValue({ value: 75 }) },
+      bodyMetric: { findFirst: vi.fn().mockResolvedValue({ value: 80 }) },
     });
     const r = await computeGoalProgress(
-      { userId: "u", type: "BODY_METRIC", config: { metricType: "BODYWEIGHT", targetValue: 80, direction: "increase" } },
+      { userId: "u", type: "BODY_METRIC", config: { metricType: "BODYWEIGHT", startingValue: 80, targetValue: 75 } },
       prisma,
     );
-    expect(r.current).toBe(75);
-    expect(r.percentage).toBeCloseTo((75 / 80) * 100, 1);
+    expect(r.current).toBe(80);
+    expect(r.percentage).toBe(0);
     expect(r.unit).toBe("kg");
   });
 
-  it("computes percentage for a 'decrease' direction goal (further = lower %)", async () => {
+  it("decrease goal: partial progress (start=80, target=75, current=77 → 60%)", async () => {
     const prisma = makePrisma({
-      bodyMetric: { findFirst: vi.fn().mockResolvedValue({ value: 90 }) },
+      bodyMetric: { findFirst: vi.fn().mockResolvedValue({ value: 77 }) },
     });
     const r = await computeGoalProgress(
-      { userId: "u", type: "BODY_METRIC", config: { metricType: "BODYWEIGHT", targetValue: 80, direction: "decrease" } },
+      { userId: "u", type: "BODY_METRIC", config: { metricType: "BODYWEIGHT", startingValue: 80, targetValue: 75 } },
       prisma,
     );
-    expect(r.percentage).toBeGreaterThan(0);
-    expect(r.percentage).toBeLessThan(100);
+    expect(r.percentage).toBeCloseTo(60, 0);
   });
 
-  it("returns 0 percentage when no metrics logged", async () => {
+  it("increase goal: partial progress (start=60, target=80, current=70 → 50%)", async () => {
+    const prisma = makePrisma({
+      bodyMetric: { findFirst: vi.fn().mockResolvedValue({ value: 70 }) },
+    });
+    const r = await computeGoalProgress(
+      { userId: "u", type: "BODY_METRIC", config: { metricType: "BODYWEIGHT", startingValue: 60, targetValue: 80 } },
+      prisma,
+    );
+    expect(r.percentage).toBeCloseTo(50, 0);
+    expect(r.unit).toBe("kg");
+  });
+
+  it("caps at 100% when current has passed the target", async () => {
+    const prisma = makePrisma({
+      bodyMetric: { findFirst: vi.fn().mockResolvedValue({ value: 74 }) },
+    });
+    const r = await computeGoalProgress(
+      { userId: "u", type: "BODY_METRIC", config: { metricType: "BODYWEIGHT", startingValue: 80, targetValue: 75 } },
+      prisma,
+    );
+    expect(r.percentage).toBe(100);
+  });
+
+  it("returns 0 percentage and null current when no metrics logged", async () => {
     const prisma = makePrisma({
       bodyMetric: { findFirst: vi.fn().mockResolvedValue(null) },
     });
     const r = await computeGoalProgress(
-      { userId: "u", type: "BODY_METRIC", config: { metricType: "BODYWEIGHT", targetValue: 80, direction: "decrease" } },
+      { userId: "u", type: "BODY_METRIC", config: { metricType: "BODYWEIGHT", startingValue: 80, targetValue: 75 } },
       prisma,
     );
     expect(r.current).toBeNull();
@@ -138,7 +190,7 @@ describe("computeGoalProgress — BODY_METRIC", () => {
       bodyMetric: { findFirst: vi.fn().mockResolvedValue({ value: 18 }) },
     });
     const r = await computeGoalProgress(
-      { userId: "u", type: "BODY_METRIC", config: { metricType: "BODY_FAT_PCT", targetValue: 15, direction: "decrease" } },
+      { userId: "u", type: "BODY_METRIC", config: { metricType: "BODY_FAT_PCT", startingValue: 22, targetValue: 15 } },
       prisma,
     );
     expect(r.unit).toBe("%");
@@ -149,7 +201,7 @@ describe("computeGoalProgress — BODY_METRIC", () => {
       bodyMetric: { findFirst: vi.fn().mockResolvedValue({ value: 85 }) },
     });
     const r = await computeGoalProgress(
-      { userId: "u", type: "BODY_METRIC", config: { metricType: "WAIST", targetValue: 80, direction: "decrease" } },
+      { userId: "u", type: "BODY_METRIC", config: { metricType: "WAIST", startingValue: 90, targetValue: 80 } },
       prisma,
     );
     expect(r.unit).toBe("cm");

@@ -38,11 +38,12 @@ async function computeStrengthGoalProgress(
       metric: "1RM" | "weightForReps";
       targetValueKg: number;
       reps?: number;
+      startingValueKg?: number;
     };
   },
   prisma: PrismaClient,
 ): Promise<GoalProgress> {
-  const { exerciseId, metric, targetValueKg, reps } = goal.config;
+  const { exerciseId, metric, targetValueKg, reps, startingValueKg } = goal.config;
 
   // Find all completed sets for this exercise
   const sets = await prisma.sessionSet.findMany({
@@ -62,7 +63,6 @@ async function computeStrengthGoalProgress(
   let currentValue: number | null = null;
 
   if (metric === "1RM") {
-    // Estimate 1RM using Epley formula: 1RM = weight × (1 + reps/30)
     const estimates = sets
       .filter((s) => s.weightKg && s.reps)
       .map((s) => s.weightKg! * (1 + s.reps! / 30));
@@ -71,7 +71,6 @@ async function computeStrengthGoalProgress(
       currentValue = Math.max(...estimates);
     }
   } else if (metric === "weightForReps" && reps) {
-    // Find best weight for the target rep count (exact or close)
     const closeMatch = sets
       .filter((s) => s.weightKg && s.reps === reps)
       .map((s) => s.weightKg!);
@@ -81,8 +80,16 @@ async function computeStrengthGoalProgress(
     }
   }
 
+  const startValue = startingValueKg ?? 0;
+  const totalRange = targetValueKg - startValue;
   const percentage =
-    currentValue !== null ? Math.min(100, (currentValue / targetValueKg) * 100) : 0;
+    currentValue !== null
+      ? totalRange > 0
+        ? Math.min(100, Math.max(0, ((currentValue - startValue) / totalRange) * 100))
+        : currentValue >= targetValueKg
+          ? 100
+          : 0
+      : 0;
 
   return {
     current: currentValue,
@@ -97,15 +104,14 @@ async function computeBodyMetricGoalProgress(
     userId: string;
     config: {
       metricType: string;
+      startingValue: number;
       targetValue: number;
-      direction: "increase" | "decrease";
     };
   },
   prisma: PrismaClient,
 ): Promise<GoalProgress> {
-  const { metricType, targetValue, direction } = goal.config;
+  const { metricType, startingValue, targetValue } = goal.config;
 
-  // Find latest metric of this type
   const latestMetric = await prisma.bodyMetric.findFirst({
     where: {
       userId: goal.userId,
@@ -117,32 +123,21 @@ async function computeBodyMetricGoalProgress(
 
   const currentValue = latestMetric?.value ?? null;
 
+  const unit =
+    metricType === "BODY_FAT_PCT" ? "%" : metricType === "BODYWEIGHT" ? "kg" : "cm";
+
   let percentage = 0;
-  let unit = ""; // will be set based on metric type
-
-  if (currentValue !== null) {
-    if (metricType === "BODY_FAT_PCT") {
-      unit = "%";
-    } else if (metricType === "BODYWEIGHT") {
-      unit = "kg";
-    } else {
-      unit = "cm"; // waist, hips, chest, arms, thighs, calf, neck
-    }
-
-    if (direction === "increase") {
-      percentage = Math.min(100, (currentValue / targetValue) * 100);
-    } else {
-      // direction === "decrease"
-      // percentage = how much of the distance to the target we've covered
-      const distance = Math.abs(currentValue - targetValue);
-      percentage = 100 - Math.min(100, (distance / currentValue) * 100);
-    }
+  if (currentValue !== null && targetValue !== startingValue) {
+    percentage = Math.min(
+      100,
+      Math.max(0, ((currentValue - startingValue) / (targetValue - startingValue)) * 100),
+    );
   }
 
   return {
     current: currentValue,
     target: targetValue,
-    percentage: Math.max(0, percentage),
+    percentage,
     unit,
   };
 }

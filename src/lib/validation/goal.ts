@@ -17,12 +17,14 @@ export const strengthGoalConfigSchema = z.object({
   metric: z.enum(["1RM", "weightForReps"]),
   targetValueKg: z.number().positive(),
   reps: z.number().int().positive().optional(),
+  startingValueKg: z.number().min(0).optional(),
 });
 
 export const bodyMetricGoalConfigSchema = z.object({
   metricType: z.enum(BODY_METRIC_TYPES),
+  startingValue: z.number(),
   targetValue: z.number(),
-  direction: z.enum(["increase", "decrease"]),
+  // direction removed — inferred from startingValue vs targetValue
 });
 
 export const consistencyGoalConfigSchema = z.object({

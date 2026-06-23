@@ -16,10 +16,13 @@ interface Props {
 function displayConfigValue(goal: any): string {
   const { type, config } = goal;
   if (type === "STRENGTH") {
-    return `${config.exerciseId} — ${config.metric === "1RM" ? "1RM" : `${config.reps} reps`} target: ${config.targetValueKg} kg`;
+    const metricLabel = config.metric === "1RM" ? "1RM" : `${config.reps} reps`;
+    const startNote = config.startingValueKg ? ` (from ${config.startingValueKg} kg)` : "";
+    return `${metricLabel} — target: ${config.targetValueKg} kg${startNote}`;
   }
   if (type === "BODY_METRIC") {
-    return `${config.metricType} — target: ${config.targetValue} (${config.direction})`;
+    const dir = config.targetValue > config.startingValue ? "↑ increase" : "↓ decrease";
+    return `${config.metricType} — start: ${config.startingValue}, target: ${config.targetValue} ${dir}`;
   }
   if (type === "CONSISTENCY") {
     return `${config.workoutsPerWeek} workouts/week`;

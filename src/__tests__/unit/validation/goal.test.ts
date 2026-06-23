@@ -39,20 +39,20 @@ describe("goalSchema — STRENGTH", () => {
 });
 
 describe("goalSchema — BODY_METRIC", () => {
-  it("accepts a valid body metric goal", () => {
+  it("accepts a weight loss goal with startingValue + targetValue", () => {
     const r = goalSchema.safeParse({
       type: "BODY_METRIC",
       title: "Lose weight",
-      config: { metricType: "BODYWEIGHT", targetValue: 80, direction: "decrease" },
+      config: { metricType: "BODYWEIGHT", startingValue: 80, targetValue: 75 },
     });
     expect(r.success).toBe(true);
   });
 
-  it("accepts an increase direction goal", () => {
+  it("accepts a size increase goal", () => {
     const r = goalSchema.safeParse({
       type: "BODY_METRIC",
       title: "Build arms",
-      config: { metricType: "ARM_LEFT", targetValue: 40, direction: "increase" },
+      config: { metricType: "ARM_LEFT", startingValue: 35, targetValue: 40 },
     });
     expect(r.success).toBe(true);
   });
@@ -61,16 +61,16 @@ describe("goalSchema — BODY_METRIC", () => {
     const r = goalSchema.safeParse({
       type: "BODY_METRIC",
       title: "Bad",
-      config: { metricType: "WINGSPAN", targetValue: 80, direction: "increase" },
+      config: { metricType: "WINGSPAN", startingValue: 80, targetValue: 70 },
     });
     expect(r.success).toBe(false);
   });
 
-  it("rejects unknown direction", () => {
+  it("rejects missing startingValue", () => {
     const r = goalSchema.safeParse({
       type: "BODY_METRIC",
       title: "Bad",
-      config: { metricType: "BODYWEIGHT", targetValue: 80, direction: "sideways" },
+      config: { metricType: "BODYWEIGHT", targetValue: 75 },
     });
     expect(r.success).toBe(false);
   });
