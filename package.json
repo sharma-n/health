@@ -12,6 +12,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
+    "db:dev-seed": "tsx --env-file .env scripts/dev-seed.ts",
     "test": "cross-env NODE_OPTIONS=--use-system-ca vitest run",
     "test:unit": "cross-env NODE_OPTIONS=--use-system-ca vitest run src/__tests__/unit src/__tests__/analytics",
     "test:integration": "cross-env NODE_OPTIONS=--use-system-ca vitest run src/__tests__/integration",
@@ -31,7 +32,9 @@
     "react": "19.2.4",
     "react-body-highlighter": "^2.0.5",
     "react-dom": "19.2.4",
+    "react-markdown": "^10.1.0",
     "recharts": "^3.8.1",
+    "remark-gfm": "^4.0.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
