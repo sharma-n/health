@@ -95,6 +95,13 @@ npm run lint
 npm run db:migrate     # prisma migrate dev (create + apply migration)
 npm run db:deploy      # prisma migrate deploy (apply existing; first run)
 npm run db:studio
+
+# Tests (run these before and after every change to catch regressions)
+npm run test               # all 237 tests (~7s)
+npm run test:unit          # unit + validation + analytics only (~2s, no DB)
+npm run test:integration   # server action + scenario tests (~5s, in-memory DB)
+npm run test:watch         # re-run on file changes during development
+npm run test:coverage      # generates coverage/index.html
 ```
 
 After editing `prisma/schema.prisma`: run a migration, then `npx prisma generate`
@@ -153,6 +160,45 @@ src/
   generated/prisma/                # generated client (gitignored)
 prisma/  schema.prisma, migrations/, seed.ts
 ```
+
+## Tests
+
+**Always run `npm run test` before committing and after any non-trivial change.** All 237 tests must pass; a red suite blocks merging. The tests are fast (~7s total) so there's no reason to skip them.
+
+### Structure
+
+```
+src/__tests__/
+  setup.ts                        # global mocks (auth, next/navigation, next/cache, @/lib/db)
+  helpers/db.ts                   # createTestDb(), seedTestUser(), seedTestExercise()
+  unit/
+    units.test.ts                 # toKg/fromKg/toCm/fromCm round-trips
+    validation/                   # one file per schema in src/lib/validation/
+  analytics/                      # one file per module in src/lib/analytics/
+  integration/
+    actions/                      # one file per action file in src/lib/actions/
+    scenarios/                    # multi-step user journeys (no browser)
+```
+
+### What each layer covers
+- **Unit** — pure functions: `lib/units.ts` and all Zod schemas. No DB, no mocks needed.
+- **Analytics** — `lib/analytics/*` functions. Each function accepts `prisma` as a param, so tests pass lightweight stubs; no DB.
+- **Integration (actions)** — every server action tested against a real in-memory SQLite DB (migrations applied). Mocks only Next.js internals (`auth`, `redirect`, `revalidatePath`). Each test file gets its own isolated temp DB via `createTestDb()`.
+- **Integration (scenarios)** — multi-action journeys that call server actions in sequence (e.g. create exercise → build workout → start session → log sets → complete → check analytics). Catch regressions that unit tests miss.
+
+### Rules for new development
+1. **New server action** → add a test file in `src/__tests__/integration/actions/`. Cover: unauthenticated call returns error, happy path writes to DB, cross-user access returns generic "not found".
+2. **New Zod schema** → add cases in the matching `src/__tests__/unit/validation/` file (valid input passes, required fields missing fail, invalid enum values fail).
+3. **New analytics function** → add a test in `src/__tests__/analytics/` passing a stub prisma object.
+4. **New migration** → add the filename to the `MIGRATIONS` array in `src/__tests__/helpers/db.ts` or integration tests will fail with schema mismatches.
+5. **New user journey** → consider adding a scenario test in `src/__tests__/integration/scenarios/`.
+
+### Test infra gotchas
+- `vi.mock("@/lib/db")` uses a `get prisma()` getter (not a static value) because `vi.mock` is hoisted before `beforeAll`. The getter reads `(globalThis as any).__testDb` which each integration test sets in `beforeAll`.
+- `redirect()` is mocked as `vi.fn()` — it does **not** throw. Actions that call `redirect` on success return `undefined`. Assert DB state instead of `result.success` for those actions.
+- `setRestAction(setId, seconds)` is positional (two args), not an object — matches the source signature.
+- `getPersonalRecords` requires ≥ 2 completed sessions per exercise before returning PRs.
+- `pool: "forks"` in `vitest.config.ts` is mandatory — prevents the Prisma singleton in `db.ts` from leaking between test files.
 
 ## Conventions
 

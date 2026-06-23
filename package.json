@@ -11,7 +11,12 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "test": "cross-env NODE_OPTIONS=--use-system-ca vitest run",
+    "test:unit": "cross-env NODE_OPTIONS=--use-system-ca vitest run src/__tests__/unit src/__tests__/analytics",
+    "test:integration": "cross-env NODE_OPTIONS=--use-system-ca vitest run src/__tests__/integration",
+    "test:watch": "cross-env NODE_OPTIONS=--use-system-ca vitest",
+    "test:coverage": "cross-env NODE_OPTIONS=--use-system-ca vitest run --coverage"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -35,12 +40,16 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^4.1.9",
+    "cross-env": "^10.1.0",
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "prisma": "^7.8.0",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^4.1.9"
   }
 }
