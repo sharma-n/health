@@ -1,0 +1,25 @@
+[project]
+name = "health-agent"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+  "agent_kit @ git+https://github.com/sharma-n/agent_kit.git",
+  "fastapi",
+  "uvicorn[standard]",
+  "httpx",
+  "python-dotenv",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/health_agent"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

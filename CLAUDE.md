@@ -58,6 +58,7 @@ roadmap (§11).** This file is the quick-start; SPEC.md is the source of truth.
 - **Milestone 8 (analytics/dashboard): DONE & verified** — 5 analytics modules (`adherence`, `progression`, `prs`, `volume`, `dashboard`), 9 UI components (`StatCard`, `RecentPRs`, `AdherenceHeatmap`, `AdherenceBars`, `ProgressionChart`, `VolumeChart`, `MetricTrendChart`, `ExerciseSelector`, `MetricSelector`), full analytics page with 5 URL-param-driven tabs (Overview, Progression, Records, Volume, Body), dashboard revamped with stats row + dynamic greeting + recent PRs strip. Recharts installed. `--success`/`--warning` CSS tokens added (were missing but referenced by GoalCard). No migrations — pure computation + UI over existing data. All server-rendered; charts are `"use client"` Recharts components receiving serialised props.
 - **Muscle body heatmap visualization (post-M8): DONE** — SVG front + back body views using `react-body-highlighter` (npm), displayed across 4 locations: (1) exercise detail highlighting primary/secondary muscles, (2) workout detail showing intensity by exercise count, (3) completed session showing intensity by completed sets, (4) analytics Overview tab displaying last 7 days of muscle work. Shared `BodyMap` component maps app MuscleGroup constants to library muscle strings. `getMuscleRecentVolume()` analytics function. No migrations — pure UI layer over existing data. Build passes TypeScript.
 - **Milestone 9 (Docker Compose): DONE & verified** — `Dockerfile` (3-stage: deps/builder/runner on node:24-alpine), `docker-compose.yml` (single web service, named volume /data for SQLite), `.dockerignore` (excludes build artifacts + secrets), `docker/entrypoint.sh` (runs migrations + seed + next start). Host port configurable via `PORT` env var (defaults to 3000). Database path overridden to `file:/data/app.db` in container.
+- **Milestone 10 (AI Foundation): DONE & verified** — Python agent sidecar (`agent_service/`) using `agent_kit` + FastAPI, streaming SSE via `POST /v1/turn`. Next.js proxy at `src/app/api/agent/route.ts` (auth-gated, rate-limited per userId, validates with Zod). Chat UI: `ChatWindow` (SSE consumer), `ChatInput` (Enter-to-send), `MessageBubble`, `ToolCallBadge`. `/chat` page replaces "More" in bottom nav; "More" reachable via link in Chat header. Docker Compose extended with `agent_service` container. 5 new env vars in `.env.example`. `python-dotenv` loads `.env` automatically in the sidecar. No tools yet (M11+).
 - Remaining domain sections still render `<ComingSoon milestone="…" />` placeholder.
 
 ## Stack (note the versions — several have breaking changes vs. older training data)
@@ -102,6 +103,11 @@ npm run test:unit          # unit + validation + analytics only (~2s, no DB)
 npm run test:integration   # server action + scenario tests (~5s, in-memory DB)
 npm run test:watch         # re-run on file changes during development
 npm run test:coverage      # generates coverage/index.html
+
+# Agent sidecar (Milestone 10+) — run from agent_service/ in a separate terminal
+cd agent_service
+uv sync                    # install Python deps (first run or after pyproject.toml changes)
+uv run uvicorn health_agent.main:app --reload --port 8000
 ```
 
 After editing `prisma/schema.prisma`: run a migration, then `npx prisma generate`

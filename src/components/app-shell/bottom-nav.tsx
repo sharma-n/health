@@ -7,7 +7,7 @@ import {
   CalendarDays,
   PlusCircle,
   LineChart,
-  Menu,
+  MessageCircle,
   type LucideIcon,
 } from "lucide-react";
 
@@ -24,12 +24,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/plans", label: "Plans", icon: CalendarDays },
   { href: "/sessions", label: "Log", icon: PlusCircle },
   { href: "/analytics", label: "Stats", icon: LineChart },
-  {
-    href: "/more",
-    label: "More",
-    icon: Menu,
-    match: ["/exercises", "/workouts", "/metrics", "/goals", "/profile"],
-  },
+  { href: "/chat", label: "Chat", icon: MessageCircle },
 ];
 
 function isActive(pathname: string, item: NavItem): boolean {

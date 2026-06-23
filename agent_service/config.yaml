@@ -1,0 +1,81 @@
+agent:
+  max_iterations: 6
+  per_tool_timeout_s: 30.0
+  system_prompt: |
+    You are a knowledgeable, encouraging fitness coach AI for a workout programming app.
+    You help users with workout programming, training advice, goal setting, and exercise science.
+    Apply principles like progressive overload, periodization, muscle balance, and recovery.
+    Be concise but thorough. When you lack context about the user's training, ask clarifying questions.
+    You will gain access to the user's actual fitness data (workouts, sessions, goals, PRs) in future updates.
+    For now, give general evidence-based advice and ask about the user's situation.
+
+memory:
+  working:
+    buffer_turns: 12
+    buffer_token_budget: 2048
+    idle_finalize_s: 900
+    ttl_s: 3600
+    sweep_interval_s: 60
+  episodic:
+    top_k: 3
+    min_score: 0.3
+    query_augment_turns: 2
+    query_rewrite: false
+  factual:
+    extraction_enabled: false
+
+context:
+  max_input_tokens: 128000
+  output_reserve_tokens: 4096
+  safety_margin: 1024
+
+stores:
+  session_backend: memory
+  profile_backend: memory
+  vector_backend: memory
+  permission_backend: memory
+  redis:
+    url: ${REDIS_URL:-redis://localhost:6379/0}
+  sqlite:
+    url: ${SQLITE_URL:-sqlite+aiosqlite:///agent_kit.db}
+  qdrant:
+    mode: ${QDRANT_MODE:-host}
+    path: ${QDRANT_PATH:-qdrant_data}
+    url: ${QDRANT_URL:-http://localhost:6333}
+    collection: episodic_memory
+    vector_size: 1536
+
+mcp:
+  startup_timeout_s: 30.0
+  servers: []
+
+tools:
+  default_allowed:
+    - remember_fact
+    - forget_fact
+    - list_facts
+    - recall
+  definitions: {}
+
+telemetry:
+  enabled: ${LANGFUSE_ENABLED:-false}
+  service_name: health-agent
+  sample_rate: 1.0
+  environment: ${LANGFUSE_ENVIRONMENT:-}
+  release: ${LANGFUSE_RELEASE:-}
+
+llm_kit:
+  llm:
+    message_format: anthropic
+    base_url: ${LLM_BASE_URL:-https://api.anthropic.com}
+    chat_completions_path: /v1/messages
+    model: ${LLM_MODEL:-claude-haiku-4-5-20251001}
+    api_key_env: ANTHROPIC_API_KEY
+    max_tokens: 4096
+  embed:
+    base_url: ${EMBED_BASE_URL:-http://127.0.0.1:1234}
+    model: ${EMBED_MODEL:-text-embedding-qwen3-embedding-0.6b}
+    api_key_env: OPENAI_API_KEY
+  rate_limit:
+    max_concurrent_requests: 16
+    requests_per_minute: 500

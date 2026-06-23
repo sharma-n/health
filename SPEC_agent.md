@@ -13,7 +13,7 @@ Browser (React)
     │  SSE streaming  /  REST
     ▼
 Next.js App (port 3000)
-    ├── POST /api/agent/chat   ──────►  Python agent_kit service (port 8000)
+    ├── POST /api/agent        ──────►  Python agent_kit service (port 8000)
     │     Proxies SSE stream            │  agent_kit run_turn()
     │     Injects X-User-Id             │  Tools call back ▼
     └── GET|POST /api/internal/*  ◄─────┘  HTTP + X-Internal-Secret + X-User-Id
@@ -32,7 +32,7 @@ agent_kit is multi-user by design — memory, sessions, and permissions are all 
 
 **Per-turn flow:**
 1. User sends message in chat UI
-2. Browser POSTs to `/api/agent/chat` (Next.js) with session cookie
+2. Browser POSTs to `/api/agent` (Next.js) with session cookie
 3. Next.js calls `auth()` → extracts `userId`
 4. Next.js proxies to `AGENT_SERVICE_URL/v1/turn` with `X-User-Id` + `X-Internal-Secret` headers and `conversation_id = f"health-{userId}"`
 5. Python sidecar calls `agent.run_turn(user_id, conversation_id, message)` — agent_kit handles all isolation from here
@@ -118,8 +118,13 @@ health/
 End-to-end streaming chat with no tools. Proves the architecture before building tools.
 
 **Python sidecar (`agent_service/`):**
-- `pyproject.toml`: `uv`-managed; `agent_kit = { git = "https://github.com/sharma-n/agent_kit.git" }`
-- `config.yaml`: Anthropic LLM (`claude-haiku-4-5-20251001`), local LM Studio embedder, in-memory stores
+- `pyproject.toml`: `uv`-managed; `agent_kit` git dep + `python-dotenv` (loads `.env` automatically so `INTERNAL_API_SECRET` / `ANTHROPIC_API_KEY` don't need to be set in the shell separately)
+- `config.yaml`: Anthropic LLM (`claude-haiku-4-5-20251001`), local LM Studio embedder, in-memory stores. **Key gotchas verified against actual library:**
+  - `stores.*_backend` values are lowercase (`memory`, not `MEMORY`) — it's a `StrEnum`
+  - `llm_kit.llm.message_format: anthropic` + `chat_completions_path: /v1/messages` + `api_key_env: ANTHROPIC_API_KEY`
+  - `AgentService` is `from agent_kit.service import AgentService` (not exported from `agent_kit.__init__`)
+  - Event types are `from agent_kit.agent.events import TextDelta, ToolCallStarted, ToolResult, TurnComplete`
+  - `ToolCallStarted.arguments` is a `dict`, not a string — JSON-encode before sending on the wire
 - `service.py`: fitness coach system prompt; builds `AgentService` with `extra_tools=[]`
 - `main.py`: FastAPI app with `POST /v1/turn` — validates `X-Internal-Secret`, calls `agent.run_turn()`, streams SSE events
 

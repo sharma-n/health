@@ -10,6 +10,22 @@ services:
       AUTH_SECRET: "${AUTH_SECRET:?Set AUTH_SECRET in .env}"
       ALLOW_REGISTRATION: "${ALLOW_REGISTRATION:-true}"
       PORT: "3000"
+      AGENT_SERVICE_URL: "http://agent_service:8000"
+      INTERNAL_API_SECRET: "${INTERNAL_API_SECRET:?Set INTERNAL_API_SECRET in .env}"
+    depends_on:
+      - agent_service
+    restart: unless-stopped
+
+  agent_service:
+    build:
+      context: ./agent_service
+    ports:
+      - "8000:8000"
+    environment:
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:?Set ANTHROPIC_API_KEY in .env}"
+      INTERNAL_API_SECRET: "${INTERNAL_API_SECRET:?Set INTERNAL_API_SECRET in .env}"
+      EMBED_BASE_URL: "${EMBED_BASE_URL:-http://localhost:1234}"
+      EMBED_MODEL: "${EMBED_MODEL:-text-embedding-qwen3-embedding-0.6b}"
     restart: unless-stopped
 
 volumes:
