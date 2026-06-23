@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { MessageSquarePlus } from "lucide-react";
 import { MessageBubble, type Message } from "./MessageBubble";
 import { ChatInput } from "./ChatInput";
 import type { ToolCall } from "./ToolCallBadge";
@@ -12,15 +13,59 @@ type SseEvent =
   | { type: "turn_complete"; iterations: number; stop_reason: string }
   | { type: "unknown" };
 
-export function ChatWindow() {
+function storageKey(kind: "messages" | "convId", userId: string) {
+  return `chat_${kind}_${userId}`;
+}
+
+export function ChatWindow({ userId }: { userId: string }) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [conversationId, setConversationId] = useState(`health-${userId}`);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [conversationId] = useState<string | undefined>(undefined);
+  const [hydrated, setHydrated] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Hydrate from localStorage after mount (avoids SSR mismatch)
+  useEffect(() => {
+    try {
+      const savedId = localStorage.getItem(storageKey("convId", userId));
+      if (savedId) setConversationId(savedId);
+      const savedMsgs = localStorage.getItem(storageKey("messages", userId));
+      if (savedMsgs) setMessages(JSON.parse(savedMsgs) as Message[]);
+    } catch {
+      // localStorage unavailable; continue without persistence
+    }
+    setHydrated(true);
+  }, [userId]);
+
+  // Persist messages whenever they change (skip before hydration to avoid overwriting)
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      localStorage.setItem(storageKey("messages", userId), JSON.stringify(messages));
+    } catch {}
+  }, [messages, hydrated, userId]);
+
+  // Persist conversationId whenever it changes
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      localStorage.setItem(storageKey("convId", userId), conversationId);
+    } catch {}
+  }, [conversationId, hydrated, userId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  function startNewChat() {
+    const newId = `health-${userId}-${Date.now()}`;
+    setConversationId(newId);
+    setMessages([]);
+    try {
+      localStorage.setItem(storageKey("convId", userId), newId);
+      localStorage.removeItem(storageKey("messages", userId));
+    } catch {}
+  }
 
   async function sendMessage(text: string) {
     setMessages((prev) => [...prev, { role: "user", content: text }]);
@@ -115,6 +160,17 @@ export function ChatWindow() {
 
   return (
     <div className="flex h-[calc(100dvh-10rem)] flex-col">
+      <div className="flex items-center justify-end px-1 pb-2">
+        <button
+          onClick={startNewChat}
+          disabled={isStreaming}
+          className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label="New chat"
+        >
+          <MessageSquarePlus className="h-3.5 w-3.5" aria-hidden />
+          New chat
+        </button>
+      </div>
       <div className="flex-1 overflow-y-auto space-y-4 px-1 py-4">
         {messages.length === 0 && (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">

@@ -49,14 +49,15 @@ def _workout_history_tool() -> Tool:
             return f"No completed sessions in the last {days} days."
         lines = [f"Recent sessions (last {days} days):"]
         for s in data[:20]:
-            header_parts = [s["date"]]
+            meta_parts = []
             if s["workoutName"]:
-                header_parts.append(s["workoutName"])
+                meta_parts.append(s["workoutName"])
             if s["durationMinutes"] is not None:
-                header_parts.append(f"{s['durationMinutes']}min")
+                meta_parts.append(f"{s['durationMinutes']}min")
             if s["overallEffort"] is not None:
-                header_parts.append(f"RPE {s['overallEffort']}")
-            lines.append("  - " + " | ".join(header_parts))
+                meta_parts.append(f"RPE {s['overallEffort']}")
+            meta_str = " | ".join(meta_parts)
+            lines.append(f"  - Session on {s['date']} (session_id: {s['id']}){': ' + meta_str if meta_str else ''}")
             for ex in s.get("exercises", []):
                 set_parts = []
                 for st in ex["sets"]:
@@ -65,7 +66,7 @@ def _workout_history_tool() -> Tool:
                     elif st["reps"] is not None:
                         set_parts.append(f"{st['reps']} reps")
                 sets_str = ", ".join(set_parts) if set_parts else "no sets logged"
-                lines.append(f"      {ex['name']}: {sets_str}")
+                lines.append(f"      {ex['name']} (exercise_id: {ex['id']}): {sets_str}")
             if s.get("notes"):
                 lines.append(f"      Notes: {s['notes']}")
         return "\n".join(lines)
@@ -153,9 +154,9 @@ def _active_plans_tool() -> Tool:
         day_names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
         lines = ["Active plans:"]
         for p in data:
-            lines.append(f"  Plan: {p['name']} ({p['startDate']} to {p['endDate']})")
+            lines.append(f"  Plan: {p['name']} (plan_id: {p['id']}, {p['startDate']} to {p['endDate']})")
             for day_idx, workout_info in sorted(p["schedule"].items(), key=lambda x: int(x[0])):
-                lines.append(f"    {day_names[int(day_idx)]}: {workout_info['workoutName']}")
+                lines.append(f"    {day_names[int(day_idx)]}: {workout_info['workoutName']} (workout_id: {workout_info['workoutId']})")
         return "\n".join(lines)
 
     return Tool(
@@ -182,7 +183,7 @@ def _goals_tool() -> Tool:
             p = g["progress"]
             deadline = f" by {g['targetDate']}" if g["targetDate"] else ""
             lines.append(
-                f"  - [{g['status']}] {g['title']} ({g['type']}) — "
+                f"  - [{g['status']}] {g['title']} (goal_id: {g['id']}, {g['type']}) — "
                 f"{p['percentage']:.0f}% ({p['current']} / {p['target']} {p['unit']}){deadline}"
             )
         return "\n".join(lines)
@@ -213,7 +214,8 @@ def _personal_records_tool() -> Tool:
         for pr in data:
             new_flag = " ★ NEW" if pr.get("isNew") else ""
             lines.append(
-                f"  - {pr['exerciseName']}: {pr['prType']} = {pr['value']:.1f} {pr['unit']}"
+                f"  - {pr['exerciseName']} (exercise_id: {pr['exerciseId']}): "
+                f"{pr['prType']} = {pr['value']:.1f} {pr['unit']}"
                 f" (on {pr['achievedAt']}){new_flag}"
             )
         return "\n".join(lines)

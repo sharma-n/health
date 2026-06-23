@@ -16,7 +16,7 @@ roadmap (§11).** This file is the quick-start; SPEC.md is the source of truth.
   list users. See SPEC.md §8.7 and the Admin section below.
 - **Milestone 2 (data model + migrations + seed): DONE & verified** — 10 domain models, FK
   cascade rules tested, `resetUserDataAction` + `deleteUserAction` wired to atomic ordered
-  deletes (tested against full data graph), 37 system exercises seeded, `lib/units.ts` +
+  deletes (tested against full data graph), 90 system exercises seeded, `lib/units.ts` +
   Zod validation schemas for all new entities. Seed idempotent (run twice = 0 duplicates).
 - **Milestone 3 (exercise library CRUD + filters + clone): DONE & verified** — `Exercise.isArchived`,
   `instructions`, `commonPitfalls` added to schema, 6 server actions (`create`, `update`, `archive`,
@@ -24,7 +24,7 @@ roadmap (§11).** This file is the quick-start; SPEC.md is the source of truth.
   `ExerciseList`, `ExerciseFilters`, `ExerciseActions`), 4 pages (list/new/detail/edit), all
   Zod-validated, rate-limited (30/5min), userId-scoped, deleted exercises protected if referenced in
   workouts/sessions. Instructions (5000 char max) and common pitfalls (2000 char max) populated for all
-  37 system exercises; users can add/edit both fields on custom exercises.
+  90 system exercises; users can add/edit both fields on custom exercises.
 - **Milestone 4 (workout builder): DONE & verified** — 3 server actions (`create`, `update`, `delete`),
   6 UI components (`WorkoutCard`, `WorkoutList`, `WorkoutBuilder` with @dnd-kit drag-to-reorder,
   `WorkoutExerciseRow`, `ExercisePicker`, `WorkoutDeleteForm`), 4 pages (list/new/detail/edit), all
@@ -61,6 +61,19 @@ roadmap (§11).** This file is the quick-start; SPEC.md is the source of truth.
 - **Milestone 10 (AI Foundation): DONE & verified** — Python agent sidecar (`agent_service/`) using `agent_kit` + FastAPI, streaming SSE via `POST /v1/turn`. Next.js proxy at `src/app/api/agent/route.ts` (auth-gated, rate-limited per userId, validates with Zod). Chat UI: `ChatWindow` (SSE consumer), `ChatInput` (Enter-to-send), `MessageBubble`, `ToolCallBadge`. `/chat` page replaces "More" in bottom nav; "More" reachable via link in Chat header. Docker Compose extended with `agent_service` container. 5 new env vars in `.env.example`. `python-dotenv` loads `.env` automatically in the sidecar. No tools yet (M11+).
 - **Milestone 11 (Query Tools): DONE & verified** — 9 internal API routes (`src/app/api/internal/`) bridging the Python agent to Prisma data: `sessions` (with full exercise+set detail), `exercises`, `workouts`, `plans`, `goals` (with live progress via `computeGoalProgress`), `analytics/adherence`, `analytics/prs`, `analytics/progression`, `analytics/muscle-volume`. Shared `_auth.ts` helper validates `X-Internal-Secret` + `X-User-Id` headers on every route. `proxy.ts` matcher updated to exclude `api/internal` so agent requests bypass the NextAuth middleware. Python side: 8 read tools in `read_tools.py` (`get_workout_history`, `get_exercises`, `get_active_plans`, `get_goals_with_progress`, `get_personal_records`, `get_exercise_progression`, `get_adherence_stats`, `get_muscle_volume`); `service.py` switched to `AgentService.build(cfg, extra_tools=get_read_tools())`; `config.yaml` `default_allowed` updated; system prompt updated to instruct agent to use tools instead of asking the user. 37 new integration tests (274 total).
 - **Milestone 12 (Coaching Intelligence): DONE & verified** — 4 synthesis tools in `agent_service/src/health_agent/tools/coaching_tools.py` that combine multiple M11 data endpoints into proactive coaching advice: `analyze_training_balance` (muscle volume + adherence → over/under-trained groups with mean+stdev classification), `assess_goal_trajectory` (goal progress + elapsed time → on-track/at-risk verdict with projected completion date), `suggest_next_workout` (active plan schedule + 2-week muscle volume + adherence → plan-aware recommendation with equipment/time constraints), `get_training_summary` (parallel gather of sessions/adherence/volume/goals/PRs → structured multi-section recap). `service.py` registers all 12 tools; `config.yaml` enriched with exercise science principles (progressive overload, periodization, muscle balance, recovery), proactive coaching persona, and 4 new `default_allowed` entries. `_LazyAsyncClient` wrapper in `client.py` defers SSL context creation to first call (fixes OPENSSL_Uplink crash on this Windows machine). Volume numbers are kg load (weight × reps), not set counts — labels updated accordingly. 20 Python tests (all pass); 274 JS tests unchanged.
+- **Goal progress fix (post-M12): DONE** — body metric goals previously showed 94% on day one
+  (formula used current value instead of a baseline). All goal types now store a `startingValue`
+  captured at creation. Formula unified to `(current − start) / (target − start) × 100` for
+  both BODY_METRIC and STRENGTH, correctly reading 0% on the first day. Direction field removed
+  from BODY_METRIC goals (derived from sign of `target − start`). Form auto-populates starting
+  value from latest logged metric (body metric goals) or PR (strength goals). Backward-compat
+  code removed; database reset to start fresh. 278 JS tests passing.
+- **Dev seed script (post-M12): DONE** — `scripts/dev-seed.ts` + `npm run db:dev-seed`. Wipes
+  all user accounts (cascades to workouts/sessions/goals/metrics), then creates a fully-loaded
+  demo account (`dev@health.local / password123`) with 3 workout templates (Push/Pull/Legs),
+  an active PPL plan, a bodyweight goal (80 → 75 kg), 2 body metric logs, and 4 completed
+  sessions with progressive overload across 2 weeks. Idempotent — safe to re-run at any time.
+  Requires system exercises to be seeded first (`npm run db:seed`).
 - Remaining domain sections still render `<ComingSoon milestone="…" />` placeholder.
 
 ## Stack (note the versions — several have breaking changes vs. older training data)
@@ -97,10 +110,12 @@ npm run build          # type-check + production build
 npm run lint
 npm run db:migrate     # prisma migrate dev (create + apply migration)
 npm run db:deploy      # prisma migrate deploy (apply existing; first run)
+npm run db:seed        # seed 90 system exercises (idempotent)
+npm run db:dev-seed    # wipe all users + create demo account with sample data (dev only)
 npm run db:studio
 
 # Tests (run these before and after every change to catch regressions)
-npm run test               # all 274 tests (~7s)
+npm run test               # all 278 tests (~7s)
 npm run test:unit          # unit + validation + analytics only (~2s, no DB)
 npm run test:integration   # server action + scenario tests (~5s, in-memory DB)
 npm run test:watch         # re-run on file changes during development
@@ -182,7 +197,7 @@ agent_service/                     # Python sidecar (M10+)
 
 ## Tests
 
-**Always run `npm run test` before committing and after any non-trivial change.** All 274 tests must pass; a red suite blocks merging. The tests are fast (~7s total) so there's no reason to skip them.
+**Always run `npm run test` before committing and after any non-trivial change.** All 278 tests must pass; a red suite blocks merging. The tests are fast (~7s total) so there's no reason to skip them.
 
 ### Structure
 

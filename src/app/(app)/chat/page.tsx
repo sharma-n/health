@@ -1,12 +1,17 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { Menu } from "lucide-react";
+import { auth } from "@/auth";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { ChatWindow } from "@/components/chat/ChatWindow";
 
 export const metadata: Metadata = { title: "Chat — Health" };
 
-export default function ChatPage() {
+export default async function ChatPage() {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+
   return (
     <>
       <PageHeader
@@ -23,7 +28,7 @@ export default function ChatPage() {
           </Link>
         }
       />
-      <ChatWindow />
+      <ChatWindow userId={session.user.id} />
     </>
   );
 }

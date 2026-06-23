@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
         status: g.status,
         targetDate: g.targetDate?.toISOString().slice(0, 10) ?? null,
         createdAt: g.createdAt.toISOString().slice(0, 10),
+        config: g.config,
         progress,
       };
     }),

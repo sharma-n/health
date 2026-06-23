@@ -141,6 +141,7 @@ def _assess_goal_trajectory_tool() -> Tool:
             )
 
         progress = goal["progress"]
+        config = goal.get("config") or {}
         pct: float = float(progress.get("percentage") or 0)
         target_date_str: str | None = goal.get("targetDate")
         created_at_str: str = goal["createdAt"]
@@ -149,10 +150,37 @@ def _assess_goal_trajectory_tool() -> Tool:
         days_elapsed = max((today - created).days, 0)
 
         lines = [f"Goal trajectory: {goal['title']} ({goal['type']}, status: {goal['status']})"]
-        lines.append(
-            f"  Progress: {pct:.1f}% complete "
-            f"({progress.get('current', 'N/A')} / {progress.get('target', 'N/A')} {progress.get('unit', '')})"
-        )
+
+        # Add starting-point and direction context so the LLM understands the full arc
+        goal_type = goal["type"]
+        unit = progress.get("unit", "")
+        current_val = progress.get("current", "N/A")
+        target_val = progress.get("target", "N/A")
+
+        if goal_type == "BODY_METRIC":
+            start = config.get("startingValue")
+            target = config.get("targetValue")
+            if start is not None and target is not None:
+                direction = "decrease" if target < start else "increase"
+                lines.append(
+                    f"  Goal direction: {direction} from {start} {unit} → {target} {unit}"
+                )
+                lines.append(f"  Current value: {current_val} {unit}")
+        elif goal_type == "STRENGTH":
+            start_kg = config.get("startingValueKg")
+            target_kg = config.get("targetValueKg")
+            metric = config.get("metric", "")
+            if start_kg is not None and target_kg is not None:
+                lines.append(
+                    f"  Goal direction: increase {metric} from {start_kg} kg → {target_kg} kg"
+                )
+                lines.append(f"  Current estimate: {current_val} {unit}")
+            else:
+                lines.append(f"  Target: {target_val} {unit}  |  Current: {current_val} {unit}")
+        else:
+            lines.append(f"  Current: {current_val} {unit}  |  Target: {target_val} {unit}")
+
+        lines.append(f"  Progress: {pct:.1f}% complete")
 
         if not target_date_str:
             lines.append("  No target date set — cannot project completion date.")

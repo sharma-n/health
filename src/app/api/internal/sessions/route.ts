@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
       exercises: {
         select: {
           order: true,
-          exercise: { select: { name: true } },
+          exercise: { select: { id: true, name: true } },
           sets: {
             where: { completed: true },
             select: {
@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
     overallEffort: s.overallEffort,
     notes: s.notes,
     exercises: s.exercises.map((ex) => ({
+      id: ex.exercise.id,
       name: ex.exercise.name,
       sets: ex.sets.map((set) => ({
         setNumber: set.setNumber,
