@@ -124,6 +124,12 @@ export function ChatWindow({ userId }: { userId: string }) {
               flushToolCalls(pendingToolCalls);
             }
           } else if (evt.type === "turn_complete") {
+            if (evt.stop_reason === "max_iterations") {
+              appendToLast(
+                "I ran out of steps before finishing — this task required too many tool calls for a single turn. " +
+                  "Try breaking it into smaller parts (e.g. create the workouts first, then create the plan).",
+              );
+            }
             break;
           }
         }

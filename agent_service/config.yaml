@@ -1,5 +1,5 @@
 agent:
-  max_iterations: 6
+  max_iterations: 12
   per_tool_timeout_s: 30.0
   system_prompt: |
     You are an expert, proactive fitness coach AI built into a workout programming app.
