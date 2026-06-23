@@ -47,3 +47,9 @@ prisma/dev.db*
 next-env.d.ts
 
 /src/generated/prisma
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+agent_service/.venv/
