@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Dumbbell, Clock, Zap } from "lucide-react";
+import { formatDateOnly } from "@/lib/dates";
 
 type SessionCardProps = {
   id: string;
@@ -21,11 +22,7 @@ function formatDuration(seconds: number): string {
 }
 
 function formatDate(date: Date): string {
-  return date.toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
+  return formatDateOnly(date, { weekday: "short", month: "short", day: "numeric" });
 }
 
 export function SessionCard({

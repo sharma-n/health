@@ -169,7 +169,12 @@ export default async function WorkoutDetailPage({
                   >
                     <div className="mb-2 flex items-start justify-between">
                       <div>
-                        <p className="font-medium text-foreground">{we.exercise.name}</p>
+                        <Link
+                          href={`/exercises/${we.exercise.id}`}
+                          className="font-medium text-foreground hover:underline"
+                        >
+                          {we.exercise.name}
+                        </Link>
                         {primaryMuscles.length > 0 && (
                           <p className="text-xs text-muted-foreground">
                             {primaryMuscles.map((m) => MUSCLE_LABELS[m]).join(", ")}

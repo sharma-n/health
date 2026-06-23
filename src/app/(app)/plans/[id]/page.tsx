@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 import { PlanDeleteForm } from "@/components/plans/plan-delete-form";
 import { PlanStatusForm } from "@/components/plans/plan-status-form";
 import type { PlanStatus } from "@/lib/constants";
+import { formatDateOnly } from "@/lib/dates";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -26,11 +27,7 @@ const STATUS_LABELS: Record<PlanStatus, string> = {
 };
 
 function formatDate(d: Date) {
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return formatDateOnly(d, { month: "short", day: "numeric", year: "numeric" });
 }
 
 export async function generateMetadata({

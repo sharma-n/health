@@ -82,8 +82,22 @@ async function logSession(opts: {
 }
 
 async function main() {
-  // ── 1. Wipe all user accounts (cascades to all user-scoped data)
+  // ── 1. Wipe all user accounts and their data in FK-safe order.
+  // A bare db.user.deleteMany() would cascade to owned exercises, but
+  // WorkoutExercise/SessionExercise reference exercises with onDelete: Restrict,
+  // so the cascade fails if those junction rows still exist. We clear leaf tables
+  // first, exactly like the admin userDataDeletions() helper does.
   console.log("▸ Deleting all user accounts…");
+  await db.sessionSet.deleteMany({});
+  await db.sessionExercise.deleteMany({});
+  await db.session.deleteMany({});
+  await db.workoutExercise.deleteMany({});
+  await db.planScheduleItem.deleteMany({});
+  await db.plan.deleteMany({});
+  await db.workout.deleteMany({});
+  await db.bodyMetric.deleteMany({});
+  await db.goal.deleteMany({});
+  await db.exercise.deleteMany({ where: { isSystem: false } });
   await db.user.deleteMany();
 
   // ── 2. Demo user
@@ -95,6 +109,7 @@ async function main() {
       passwordHash: hash,
       displayName: "Dev User",
       unitPreference: "KG",
+      timezone: "America/New_York",
       isAdmin: true,
       onboardingComplete: true,
     },

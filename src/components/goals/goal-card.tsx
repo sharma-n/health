@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatDateOnly } from "@/lib/dates";
 
 interface GoalProgress {
   current: number | null;
@@ -56,7 +57,7 @@ export function GoalCard({ goal, progress }: GoalCardProps) {
 
             {goal.targetDate && (
               <p className="text-xs text-muted-foreground">
-                Target: {new Date(goal.targetDate).toLocaleDateString()}
+                Target: {formatDateOnly(goal.targetDate)}
               </p>
             )}
           </div>

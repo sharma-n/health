@@ -38,6 +38,7 @@ export async function POST(req: Request): Promise<Response> {
       "Content-Type": "application/json",
       "X-Internal-Secret": process.env.INTERNAL_API_SECRET ?? "",
       "X-User-Id": userId,
+      "X-User-Timezone": session.user.timezone ?? "UTC",
     },
     body: JSON.stringify({ message, conversation_id }),
   }).catch(() => null);

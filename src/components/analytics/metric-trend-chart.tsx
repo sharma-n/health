@@ -32,7 +32,9 @@ export function MetricTrendChart({ data, unit, goalTarget }: MetricTrendChartPro
   }
 
   const formatted = data.map((d) => {
-    const dt = new Date(d.date + "T00:00:00Z");
+    // Parse as local midnight (no Z) so dates display on the correct calendar day
+    // regardless of the browser's timezone offset.
+    const dt = new Date(d.date + "T00:00:00");
     return {
       ...d,
       label: dt.toLocaleDateString("en-US", { month: "short", day: "numeric" }),

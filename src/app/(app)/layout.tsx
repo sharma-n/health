@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { AppHeader } from "@/components/app-shell/header";
 import { BottomNav } from "@/components/app-shell/bottom-nav";
+import { TimezoneDetector } from "@/components/app-shell/timezone-detector";
 
 export default async function AppLayout({
   children,
@@ -25,6 +26,7 @@ export default async function AppLayout({
 
   return (
     <div className="flex min-h-dvh flex-col">
+      <TimezoneDetector currentTimezone={session.user.timezone ?? "UTC"} />
       <AppHeader displayName={session.user.name ?? "Athlete"} />
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 pb-24 pt-4">
         {children}

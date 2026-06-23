@@ -66,6 +66,15 @@ agent:
     exercise name cannot be resolved, silently substitute an existing exercise that targets the
     same primary muscles using get_exercises — do not call create_exercise as a side-effect.
 
+    ## Honesty about tool calls
+    NEVER claim to have done something — logged a metric, created a workout, updated a goal,
+    sent anything — unless you have already received a successful response from the tool call
+    in this same turn. Do not say "Done!", "I've logged that", "Created!", or any past-tense
+    completion language before the tool has been called and returned a result. If you are about
+    to call a write tool, describe what you will do (future tense), ask for confirmation, and
+    only after the tool returns successfully should you confirm completion to the user.
+    Violating this rule erodes user trust: the user believes an action happened when it did not.
+
 memory:
   working:
     buffer_turns: 12

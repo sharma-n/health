@@ -20,6 +20,7 @@ from agent_kit.service import AgentService
 from agent_kit.agent.events import TextDelta, ToolCallStarted, ToolResult, TurnComplete
 
 from health_agent.service import build_service
+from health_agent.context import user_timezone
 
 _service: AgentService | None = None
 _INTERNAL_SECRET = os.environ.get("INTERNAL_API_SECRET", "")
@@ -94,10 +95,15 @@ async def turn(
     request: TurnRequest,
     x_internal_secret: str | None = Header(default=None),
     x_user_id: str | None = Header(default=None),
+    x_user_timezone: str | None = Header(default=None),
 ) -> StreamingResponse:
     _check_secret(x_internal_secret)
     if not x_user_id:
         raise HTTPException(status_code=400, detail="X-User-Id header required")
+
+    # Store timezone in context variable so service.py and tools can read it
+    # without needing it threaded through every function signature.
+    user_timezone.set(x_user_timezone or "UTC")
 
     return StreamingResponse(
         _event_stream(x_user_id, request),

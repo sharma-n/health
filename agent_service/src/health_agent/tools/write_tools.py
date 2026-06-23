@@ -2,13 +2,26 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from llm_kit import ToolDefinition
 from agent_kit.tools.base import Tool
 
 from health_agent.tools.client import http_client
+from health_agent.context import user_timezone
+
+
+def _today_str() -> str:
+    """Return today's date as YYYY-MM-DD in the user's timezone."""
+    tz_name = user_timezone.get()
+    try:
+        tz = ZoneInfo(tz_name)
+    except (ZoneInfoNotFoundError, Exception):
+        from datetime import timezone as _tz
+        tz = _tz.utc
+    return datetime.now(tz).date().isoformat()
 
 _DAY_NAME_TO_INT: dict[str, int] = {
     "sunday": 0,
@@ -372,7 +385,7 @@ def _log_body_metric_tool() -> Tool:
     async def handler(user_id: str, args: dict[str, Any]) -> str:
         metric_type = str(args.get("metric_type", "")).strip().upper()
         value = args.get("value")
-        log_date = str(args.get("date", date.today().isoformat())).strip()
+        log_date = str(args.get("date", _today_str())).strip()
         note = str(args.get("note", "")).strip() or None
 
         if not metric_type:

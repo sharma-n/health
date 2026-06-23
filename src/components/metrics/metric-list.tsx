@@ -5,6 +5,7 @@ import { Trash2 } from "lucide-react";
 import { deleteBodyMetricAction, BodyMetricFormState } from "@/lib/actions/body-metric";
 import { BODY_METRIC_TYPES, UnitPreference } from "@/lib/constants";
 import { fromKg, fromCm, weightUnitLabel, lengthUnitLabel } from "@/lib/units";
+import { formatDateOnly } from "@/lib/dates";
 
 interface Metric {
   id: string;
@@ -33,7 +34,7 @@ function formatDisplayValue(metric: Metric, unitPreference: UnitPreference): { v
 }
 
 function formatDate(date: Date): string {
-  return new Date(date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+  return formatDateOnly(date, { year: "numeric", month: "short", day: "numeric" });
 }
 
 function groupByType(metrics: Metric[]): Record<string, Metric[]> {

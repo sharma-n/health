@@ -206,6 +206,28 @@ describe("computeGoalProgress — BODY_METRIC", () => {
     );
     expect(r.unit).toBe("cm");
   });
+
+  it("picks the latest metric when multiple logged on the same day", async () => {
+    // When two metrics are logged on same date, findFirst with orderBy: [{ date: "desc" }, { createdAt: "desc" }]
+    // should pick the one with the later createdAt timestamp.
+    // Decrease goal: start=80, target=75, current=79.8 → (79.8-80)/(75-80)*100 = 4%
+    const findFirstFn = vi.fn();
+    findFirstFn.mockImplementation(({ orderBy }) => {
+      // Verify orderBy is correct
+      expect(orderBy).toEqual([{ date: "desc" }, { createdAt: "desc" }]);
+      return Promise.resolve({ value: 79.8 });
+    });
+    const prisma = makePrisma({
+      bodyMetric: { findFirst: findFirstFn },
+    });
+    const r = await computeGoalProgress(
+      { userId: "u", type: "BODY_METRIC", config: { metricType: "BODYWEIGHT", startingValue: 80, targetValue: 75 } },
+      prisma,
+    );
+    expect(r.current).toBe(79.8);
+    // Percentage: (79.8 - 80) / (75 - 80) = -0.2 / -5 = 0.04 = 4%
+    expect(r.percentage).toBeCloseTo(4, 0);
+  });
 });
 
 describe("computeGoalProgress — CONSISTENCY", () => {

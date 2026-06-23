@@ -35,12 +35,15 @@ export function OnboardingForm({ unitPreference }: Props) {
               exerciseId: goalData.exerciseId || "",
               metric: goalData.strengthMetric || "1RM",
               targetValueKg: parseFloat(goalData.targetWeight || "0"),
+              startingValueKg: goalData.startingValueKg
+                ? parseFloat(goalData.startingValueKg)
+                : undefined,
             }
           : goalType === "BODY_METRIC"
             ? {
                 metricType: goalData.metricType || "",
+                startingValue: parseFloat(goalData.startingValue || "0"),
                 targetValue: parseFloat(goalData.targetValue || "0"),
-                direction: goalData.direction || "decrease",
               }
             : {
                 workoutsPerWeek: parseInt(goalData.workoutsPerWeek || "0", 10),
@@ -174,6 +177,17 @@ export function OnboardingForm({ unitPreference }: Props) {
                           ))}
                         </div>
                       </div>
+                      <Field label={`Starting value (${unitLabel}) — current best (optional)`} htmlFor="startingValueKg">
+                        <Input
+                          id="startingValueKg"
+                          type="number"
+                          placeholder="e.g. 80"
+                          step="0.1"
+                          inputMode="decimal"
+                          value={goalData.startingValueKg || ""}
+                          onChange={(e) => setGoalData({ ...goalData, startingValueKg: e.target.value })}
+                        />
+                      </Field>
                       <Field label={`Target weight (${unitLabel})`} htmlFor="targetWeight">
                         <Input
                           id="targetWeight"
@@ -194,7 +208,15 @@ export function OnboardingForm({ unitPreference }: Props) {
                         <select
                           id="metricType"
                           value={goalData.metricType || ""}
-                          onChange={(e) => setGoalData({ ...goalData, metricType: e.target.value })}
+                          onChange={(e) => {
+                            const updates: Record<string, any> = { metricType: e.target.value };
+                            // Auto-populate starting value from bodyweight field when tracking BODYWEIGHT
+                            const bw = (document.getElementById("bodyweightKg") as HTMLInputElement)?.value;
+                            if (e.target.value === "BODYWEIGHT" && bw) {
+                              updates.startingValue = bw;
+                            }
+                            setGoalData({ ...goalData, ...updates });
+                          }}
                           className="h-11 w-full rounded-[var(--radius-app)] border border-border bg-surface px-3 text-base text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30"
                         >
                           <option value="">Select a metric</option>
@@ -202,6 +224,17 @@ export function OnboardingForm({ unitPreference }: Props) {
                             <option key={t} value={t}>{t.replace(/_/g, " ")}</option>
                           ))}
                         </select>
+                      </Field>
+                      <Field label="Starting value" htmlFor="startingValue">
+                        <Input
+                          id="startingValue"
+                          type="number"
+                          placeholder="e.g. 80"
+                          step="0.1"
+                          inputMode="decimal"
+                          value={goalData.startingValue || ""}
+                          onChange={(e) => setGoalData({ ...goalData, startingValue: e.target.value })}
+                        />
                       </Field>
                       <Field label="Target value" htmlFor="targetValue">
                         <Input
@@ -214,26 +247,16 @@ export function OnboardingForm({ unitPreference }: Props) {
                           onChange={(e) => setGoalData({ ...goalData, targetValue: e.target.value })}
                         />
                       </Field>
-                      <div>
-                        <label className="text-sm font-medium text-foreground">Direction</label>
-                        <div className="space-y-2 mt-2">
-                          {[
-                            { value: "decrease", label: "Decrease" },
-                            { value: "increase", label: "Increase" },
-                          ].map((opt) => (
-                            <label key={opt.value} className="flex items-center gap-3 cursor-pointer">
-                              <input
-                                type="radio"
-                                value={opt.value}
-                                checked={goalData.direction === opt.value}
-                                onChange={(e) => setGoalData({ ...goalData, direction: e.target.value })}
-                                className="rounded-full"
-                              />
-                              <span className="text-sm">{opt.label}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
+                      {goalData.startingValue && goalData.targetValue && (
+                        <p className="text-xs text-muted-foreground">
+                          Direction:{" "}
+                          {parseFloat(goalData.targetValue) > parseFloat(goalData.startingValue)
+                            ? "increase ↑"
+                            : parseFloat(goalData.targetValue) < parseFloat(goalData.startingValue)
+                              ? "decrease ↓"
+                              : "no change"}
+                        </p>
+                      )}
                     </>
                   )}
 

@@ -30,6 +30,11 @@ export const registerSchema = z
 export const updateProfileSchema = z.object({
   displayName: z.string().trim().min(1, "Name is required.").max(80),
   unitPreference: z.enum(UNIT_PREFERENCES),
+  timezone: z.string().trim().min(1).max(100).optional(),
+});
+
+export const updateTimezoneSchema = z.object({
+  timezone: z.string().trim().min(1, "Timezone is required.").max(100),
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;

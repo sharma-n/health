@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { computeGoalProgress } from "@/lib/analytics/goals";
 import { GoalDetailActions } from "@/components/goals/goal-detail-actions";
+import { formatDateOnly } from "@/lib/dates";
 
 export const metadata: Metadata = { title: "Goal — Health" };
 
@@ -112,7 +113,7 @@ export default async function GoalDetailPage(props: Props) {
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Target Date</span>
               <span className="text-sm font-medium text-foreground">
-                {new Date(goal.targetDate).toLocaleDateString()}
+                {formatDateOnly(goal.targetDate)}
               </span>
             </div>
           )}

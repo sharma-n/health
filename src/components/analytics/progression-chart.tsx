@@ -39,9 +39,9 @@ export function ProgressionChart({ data, metric }: ProgressionChartProps) {
     );
   }
 
-  // Format x-axis date labels
+  // Format x-axis date labels — local midnight (no Z) avoids off-by-one in UTC- timezones.
   const formatted = data.map((d) => {
-    const dt = new Date(d.date + "T00:00:00Z");
+    const dt = new Date(d.date + "T00:00:00");
     return {
       ...d,
       label: dt.toLocaleDateString("en-US", { month: "short", day: "numeric" }),

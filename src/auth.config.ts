@@ -43,7 +43,7 @@ export const authConfig = {
       // Everything else requires a session.
       return isLoggedIn;
     },
-    // Persist user id + unit preference + admin flag + onboarding status into the JWT.
+    // Persist user id + unit preference + admin flag + onboarding status + timezone into the JWT.
     jwt({ token, user }) {
       // `user` is only present on sign-in; our authorize() always sets id.
       if (user?.id) {
@@ -51,16 +51,18 @@ export const authConfig = {
         token.unitPreference = user.unitPreference;
         token.isAdmin = user.isAdmin;
         token.onboardingComplete = user.onboardingComplete;
+        token.timezone = user.timezone;
       }
       return token;
     },
-    // Expose id + unit preference + admin flag + onboarding status on the session.
+    // Expose id + unit preference + admin flag + onboarding status + timezone on the session.
     session({ session, token }) {
       if (session.user) {
         session.user.id = token.id;
         session.user.unitPreference = token.unitPreference;
         session.user.isAdmin = token.isAdmin;
         session.user.onboardingComplete = token.onboardingComplete;
+        session.user.timezone = token.timezone ?? "UTC";
       }
       return session;
     },

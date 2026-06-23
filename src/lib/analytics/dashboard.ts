@@ -13,9 +13,10 @@ export interface DashboardStats {
 export async function getDashboardStats(
   userId: string,
   prisma: PrismaClient,
+  timezone = "UTC",
 ): Promise<DashboardStats> {
   const [adherence, allPRs] = await Promise.all([
-    getAdherenceStats(userId, prisma),
+    getAdherenceStats(userId, prisma, timezone),
     getPersonalRecords(userId, prisma),
   ]);
 

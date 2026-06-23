@@ -14,9 +14,9 @@ export function AppHeader({ displayName }: { displayName: string }) {
         </Link>
 
         <div className="flex items-center gap-3">
-          <span className="hidden text-sm text-muted-foreground sm:inline">
+          <Link href="/profile" className="hidden text-sm text-muted-foreground hover:text-foreground transition-colors sm:inline">
             {displayName}
-          </span>
+          </Link>
           <form action={signOutAction}>
             <button
               type="submit"

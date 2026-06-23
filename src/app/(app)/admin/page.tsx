@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { UserAdminCard } from "@/components/admin/user-admin-card";
+import { formatDateOnly } from "@/lib/dates";
 
 export const metadata: Metadata = { title: "Admin — Health" };
 
@@ -43,7 +44,7 @@ export default async function AdminPage() {
                 email: u.email,
                 displayName: u.displayName,
                 isAdmin: u.isAdmin,
-                createdAtLabel: u.createdAt.toLocaleDateString(),
+                createdAtLabel: formatDateOnly(u.createdAt),
               }}
               isSelf={u.id === session.user.id}
             />

@@ -8,6 +8,6 @@ export async function GET(req: NextRequest) {
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { userId } = auth;
 
-  const stats = await getAdherenceStats(userId, prisma);
+  const stats = await getAdherenceStats(userId, prisma, auth.timezone);
   return NextResponse.json(stats);
 }

@@ -6,7 +6,7 @@ import { Prisma } from "@/generated/prisma/client";
 
 import { signIn, signOut } from "@/auth";
 import { prisma } from "@/lib/db";
-import { loginSchema, registerSchema, updateProfileSchema } from "@/lib/validation/auth";
+import { loginSchema, registerSchema, updateProfileSchema, updateTimezoneSchema } from "@/lib/validation/auth";
 import { DEFAULT_UNIT_PREFERENCE } from "@/lib/constants";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
@@ -152,6 +152,7 @@ export async function updateProfileAction(
   const parsed = updateProfileSchema.safeParse({
     displayName: formData.get("displayName"),
     unitPreference: formData.get("unitPreference"),
+    timezone: formData.get("timezone") || undefined,
   });
 
   if (!parsed.success) {
@@ -164,6 +165,7 @@ export async function updateProfileAction(
       data: {
         displayName: parsed.data.displayName,
         unitPreference: parsed.data.unitPreference,
+        ...(parsed.data.timezone ? { timezone: parsed.data.timezone } : {}),
       },
     });
   } catch {
@@ -171,4 +173,23 @@ export async function updateProfileAction(
   }
 
   return { success: true };
+}
+
+/**
+ * Silently update only the user's timezone. Called by the TimezoneDetector
+ * component on first visit when the stored timezone is still the "UTC" default.
+ */
+export async function updateTimezoneAction(timezone: string): Promise<void> {
+  const { auth: authFn } = await import("@/auth");
+  const session = await authFn();
+  const userId = session?.user?.id;
+  if (!userId) return;
+
+  const parsed = updateTimezoneSchema.safeParse({ timezone });
+  if (!parsed.success) return;
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { timezone: parsed.data.timezone },
+  }).catch(() => {});
 }

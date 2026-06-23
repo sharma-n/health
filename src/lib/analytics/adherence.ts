@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@/generated/prisma/client";
+import { todayInTz } from "@/lib/dates";
 
 export interface HeatmapDay {
   date: string; // "YYYY-MM-DD"
@@ -22,8 +23,18 @@ export interface AdherenceStats {
   weeklyBars: WeeklyBar[];
 }
 
+/** UTC-based date string — used for week-boundary arithmetic (anchors, not session bucketing). */
 function toDateStr(d: Date): string {
   return d.toISOString().slice(0, 10);
+}
+
+/** Convert a UTC timestamp to YYYY-MM-DD in the user's timezone for session bucketing. */
+function toDateStrInTz(d: Date, tz: string): string {
+  try {
+    return d.toLocaleDateString("en-CA", { timeZone: tz });
+  } catch {
+    return d.toISOString().slice(0, 10);
+  }
 }
 
 function startOfWeek(d: Date): Date {
@@ -39,9 +50,10 @@ function startOfWeek(d: Date): Date {
 export async function getAdherenceStats(
   userId: string,
   prisma: PrismaClient,
+  timezone = "UTC",
 ): Promise<AdherenceStats> {
   const now = new Date();
-  const todayStr = toDateStr(now);
+  const todayStr = todayInTz(timezone);
 
   // Fetch all completed sessions in the last 16 weeks (112 days) + extra for streak
   const since = new Date(now);
@@ -63,10 +75,10 @@ export async function getAdherenceStats(
     where: { userId, endedAt: { not: null } },
   });
 
-  // Build a set of dates with sessions
+  // Build a set of dates with sessions — bucketed by user's local timezone date.
   const sessionDates = new Set<string>();
   for (const s of sessions) {
-    sessionDates.add(toDateStr(s.startedAt));
+    sessionDates.add(toDateStrInTz(s.startedAt, timezone));
   }
 
   // ── Streak calculation ──────────────────────────────────────────────────────
@@ -120,7 +132,7 @@ export async function getAdherenceStats(
 
   const countByDate = new Map<string, number>();
   for (const s of sessions) {
-    const d = toDateStr(s.startedAt);
+    const d = toDateStrInTz(s.startedAt, timezone);
     countByDate.set(d, (countByDate.get(d) ?? 0) + 1);
   }
 

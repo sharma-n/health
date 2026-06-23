@@ -18,6 +18,7 @@ import { getExerciseProgression, getTrainedExercises } from "@/lib/analytics/pro
 import { getMuscleVolumeByWeek } from "@/lib/analytics/volume";
 import { MuscleMapOverview } from "@/components/analytics/muscle-map-overview";
 import { Trophy, TrendingUp } from "lucide-react";
+import { formatDateOnly } from "@/lib/dates";
 
 export const metadata: Metadata = { title: "Analytics — Health" };
 
@@ -58,7 +59,7 @@ export default async function AnalyticsPage({ searchParams }: AnalyticsPageProps
         <AnalyticsTabNav activeTab={activeTab} />
       </Suspense>
 
-      {activeTab === "overview" && <OverviewTab userId={userId} />}
+      {activeTab === "overview" && <OverviewTab userId={userId} timezone={session.user.timezone ?? "UTC"} />}
       {activeTab === "progression" && (
         <ProgressionTab
           userId={userId}
@@ -79,8 +80,8 @@ export default async function AnalyticsPage({ searchParams }: AnalyticsPageProps
 
 // ── Overview ─────────────────────────────────────────────────────────────────
 
-async function OverviewTab({ userId }: { userId: string }) {
-  const stats = await getAdherenceStats(userId, prisma);
+async function OverviewTab({ userId, timezone }: { userId: string; timezone: string }) {
+  const stats = await getAdherenceStats(userId, prisma, timezone);
 
   const weekChange =
     stats.sessionsLastWeek > 0
@@ -337,10 +338,7 @@ async function RecordsTab({ userId }: { userId: string }) {
                     {PR_LABEL[pr.prType]}
                   </p>
                   <p className="text-[10px] text-muted-foreground">
-                    {new Date(pr.achievedAt + "T00:00:00Z").toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                    })}
+                    {formatDateOnly(pr.achievedAt, { month: "short", day: "numeric" })}
                   </p>
                 </div>
               ))}

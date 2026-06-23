@@ -6,18 +6,59 @@ import { Check, AlertCircle } from "lucide-react";
 import { updateProfileAction } from "@/lib/actions/auth";
 import type { UnitPreference } from "@/lib/constants";
 
+// Common IANA timezones grouped for the selector.
+const COMMON_TIMEZONES = [
+  "UTC",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "America/Anchorage",
+  "America/Honolulu",
+  "America/Toronto",
+  "America/Vancouver",
+  "America/Sao_Paulo",
+  "America/Mexico_City",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Berlin",
+  "Europe/Rome",
+  "Europe/Madrid",
+  "Europe/Amsterdam",
+  "Europe/Stockholm",
+  "Europe/Warsaw",
+  "Europe/Istanbul",
+  "Europe/Moscow",
+  "Africa/Cairo",
+  "Africa/Johannesburg",
+  "Asia/Dubai",
+  "Asia/Kolkata",
+  "Asia/Dhaka",
+  "Asia/Bangkok",
+  "Asia/Singapore",
+  "Asia/Shanghai",
+  "Asia/Tokyo",
+  "Asia/Seoul",
+  "Australia/Sydney",
+  "Australia/Melbourne",
+  "Pacific/Auckland",
+];
+
 type ProfileEditorProps = {
   displayName: string;
   unitPreference: UnitPreference;
+  timezone: string;
 };
 
 export function ProfileEditor({
   displayName: initialDisplayName,
   unitPreference: initialUnitPreference,
+  timezone: initialTimezone,
 }: ProfileEditorProps) {
   const [state, formAction] = useActionState(updateProfileAction, {});
   const [displayName, setDisplayName] = useState(initialDisplayName);
   const [unitPreference, setUnitPreference] = useState<UnitPreference>(initialUnitPreference);
+  const [timezone, setTimezone] = useState(initialTimezone);
 
   return (
     <form action={formAction} className="space-y-4">
@@ -83,6 +124,34 @@ export function ProfileEditor({
         </div>
         {state.fieldErrors?.unitPreference && (
           <p className="mt-1 text-sm text-danger">{state.fieldErrors.unitPreference[0]}</p>
+        )}
+      </div>
+
+      <div>
+        <label htmlFor="timezone" className="block text-sm font-medium text-foreground mb-2">
+          Timezone
+        </label>
+        <select
+          id="timezone"
+          name="timezone"
+          value={timezone}
+          onChange={(e) => setTimezone(e.target.value)}
+          className="w-full h-11 rounded-[var(--radius-app)] border border-border bg-surface px-3 text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30"
+        >
+          {COMMON_TIMEZONES.map((tz) => (
+            <option key={tz} value={tz}>
+              {tz.replace(/_/g, " ")}
+            </option>
+          ))}
+          {!COMMON_TIMEZONES.includes(timezone) && (
+            <option value={timezone}>{timezone.replace(/_/g, " ")}</option>
+          )}
+        </select>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Used for correct date display. Auto-detected on first sign-in.
+        </p>
+        {state.fieldErrors?.timezone && (
+          <p className="mt-1 text-sm text-danger">{state.fieldErrors.timezone[0]}</p>
         )}
       </div>
 

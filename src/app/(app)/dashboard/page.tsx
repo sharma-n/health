@@ -20,6 +20,7 @@ import { computeGoalProgress } from "@/lib/analytics/goals";
 import { getDashboardStats } from "@/lib/analytics/dashboard";
 import { StatCard } from "@/components/analytics/stat-card";
 import { RecentPRs } from "@/components/analytics/recent-prs";
+import { formatDateOnly, todayInTz, dayOfWeekInTz } from "@/lib/dates";
 
 export const metadata: Metadata = { title: "Home — Health" };
 
@@ -82,9 +83,10 @@ export default async function DashboardPage() {
   const userId = session?.user?.id;
   const firstName = (session?.user?.name ?? "Athlete").split(" ")[0];
 
-  const now = new Date();
-  const dayOfWeek = now.getDay();
-  const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  const tz = session?.user?.timezone ?? "UTC";
+  const todayStr = todayInTz(tz);                          // "YYYY-MM-DD" in user's tz
+  const today = new Date(todayStr + "T00:00:00Z");         // UTC midnight of user's today
+  const dayOfWeek = dayOfWeekInTz(tz);                     // 0=Sun … 6=Sat in user's tz
 
   const [todayOccurrence, stats] = await Promise.all([
     userId
@@ -104,7 +106,7 @@ export default async function DashboardPage() {
           },
         })
       : null,
-    userId ? getDashboardStats(userId, prisma) : null,
+    userId ? getDashboardStats(userId, prisma, tz) : null,
   ]);
 
   const description = stats
@@ -256,7 +258,7 @@ async function DashboardGoalsAndWeight({ userId }: { userId: string }) {
             <span className="text-sm text-muted-foreground">kg</span>
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            {new Date(latestWeight.date).toLocaleDateString()}
+            {formatDateOnly(latestWeight.date)}
           </p>
         </div>
       )}

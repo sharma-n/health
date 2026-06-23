@@ -8,6 +8,7 @@ declare module "next-auth" {
       unitPreference: UnitPreference;
       isAdmin: boolean;
       onboardingComplete: boolean;
+      timezone: string;
     } & DefaultSession["user"];
   }
 
@@ -15,6 +16,7 @@ declare module "next-auth" {
     unitPreference: UnitPreference;
     isAdmin: boolean;
     onboardingComplete: boolean;
+    timezone: string;
   }
 }
 
@@ -26,5 +28,6 @@ declare module "@auth/core/jwt" {
     unitPreference: UnitPreference;
     isAdmin: boolean;
     onboardingComplete: boolean;
+    timezone: string;
   }
 }

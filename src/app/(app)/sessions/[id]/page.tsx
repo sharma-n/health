@@ -5,6 +5,7 @@ import { Clock, Zap, FileText, CheckCircle2, Circle } from "lucide-react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/app-shell/page-header";
+import { formatDateOnly } from "@/lib/dates";
 import { SessionLogger } from "@/components/sessions/session-logger";
 import { SessionDeleteForm } from "@/components/sessions/session-delete-form";
 import type { MuscleGroup, UnitPreference } from "@/lib/constants";
@@ -35,12 +36,7 @@ function formatDuration(seconds: number): string {
 }
 
 function formatDateTime(date: Date): string {
-  return date.toLocaleDateString(undefined, {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  return formatDateOnly(date, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 }
 
 function round2(n: number): number {

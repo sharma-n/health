@@ -28,6 +28,7 @@ export default async function ProfilePage() {
           <ProfileEditor
             displayName={user?.name ?? ""}
             unitPreference={user?.unitPreference ?? "KG"}
+            timezone={user?.timezone ?? "UTC"}
           />
         </div>
       </div>

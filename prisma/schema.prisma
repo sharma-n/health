@@ -23,6 +23,10 @@ model User {
   displayName    String
   /// "KG" | "LBS" — canonical storage is always kg; this is a display pref.
   unitPreference String   @default("KG")
+  /// IANA timezone string (e.g. "America/New_York"). Defaults to "UTC" until
+  /// auto-detected by the browser on first visit. Used for correct date display
+  /// and day-of-week calculations server-side and in the agent sidecar.
+  timezone       String   @default("UTC")
   /// The very first registered user is the admin (set at registration). Admins
   /// can manage other accounts via /admin. Never the default; see SPEC.md §8.
   isAdmin        Boolean  @default(false)

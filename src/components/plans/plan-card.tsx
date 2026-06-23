@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CalendarDays } from "lucide-react";
 import type { PlanStatus } from "@/lib/constants";
+import { formatDateOnly } from "@/lib/dates";
 
 export type PlanListItem = {
   id: string;
@@ -27,7 +28,7 @@ const STATUS_LABELS: Record<PlanStatus, string> = {
 };
 
 function formatDate(d: Date) {
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return formatDateOnly(d, { month: "short", day: "numeric", year: "numeric" });
 }
 
 export function PlanCard({ plan }: { plan: PlanListItem }) {

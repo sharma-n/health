@@ -4,13 +4,26 @@ from __future__ import annotations
 import asyncio
 import json
 import statistics
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from llm_kit import ToolDefinition
 from agent_kit.tools.base import Tool
 
 from health_agent.tools.client import http_client
+from health_agent.context import user_timezone
+
+
+def _local_now() -> datetime:
+    """Return current datetime in the user's timezone (from request context)."""
+    tz_name = user_timezone.get()
+    try:
+        tz = ZoneInfo(tz_name)
+    except (ZoneInfoNotFoundError, Exception):
+        from datetime import timezone as _tz
+        tz = _tz.utc
+    return datetime.now(tz)
 
 
 async def _get(user_id: str, path: str, params: dict[str, Any] | None = None) -> str:
@@ -145,7 +158,7 @@ def _assess_goal_trajectory_tool() -> Tool:
         pct: float = float(progress.get("percentage") or 0)
         target_date_str: str | None = goal.get("targetDate")
         created_at_str: str = goal["createdAt"]
-        today = date.today()
+        today = _local_now().date()
         created = date.fromisoformat(created_at_str)
         days_elapsed = max((today - created).days, 0)
 
@@ -278,7 +291,7 @@ def _suggest_next_workout_tool() -> Tool:
 
         # API schedule: 0=Sun, 1=Mon ... 6=Sat
         # Python weekday(): 0=Mon, 6=Sun → convert: (weekday + 1) % 7
-        day_idx = str((date.today().weekday() + 1) % 7)
+        day_idx = str((_local_now().weekday() + 1) % 7)
 
         scheduled_workout: str | None = None
         try:

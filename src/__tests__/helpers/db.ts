@@ -15,6 +15,7 @@ const MIGRATIONS = [
   "20260621151818_add_exercise_instructions_pitfalls/migration.sql",
   "20260622143819_add_onboarding_complete/migration.sql",
   "20260622153438_add_body_metric_created_at/migration.sql",
+  "20260623182123_add_user_timezone/migration.sql",
 ];
 
 export function createTestDb(): PrismaClient {
@@ -67,6 +68,7 @@ export async function seedTestUser(
     isAdmin: boolean;
     unitPreference: string;
     onboardingComplete: boolean;
+    timezone: string;
   }> = {},
 ) {
   const bcrypt = await import("bcryptjs");
@@ -79,6 +81,7 @@ export async function seedTestUser(
       unitPreference: overrides.unitPreference ?? "KG",
       isAdmin: overrides.isAdmin ?? false,
       onboardingComplete: overrides.onboardingComplete ?? true,
+      timezone: overrides.timezone ?? "UTC",
     },
     select: { id: true },
   });

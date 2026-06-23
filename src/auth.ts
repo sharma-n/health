@@ -22,19 +22,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.unitPreference = user.unitPreference;
         token.isAdmin = user.isAdmin;
         token.onboardingComplete = user.onboardingComplete;
+        token.timezone = user.timezone;
         return token;
       }
       // Subsequent accesses: refresh mutable fields so DB changes are live.
       if (token.id) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.id },
-          select: { unitPreference: true, displayName: true, isAdmin: true, onboardingComplete: true },
+          select: { unitPreference: true, displayName: true, isAdmin: true, onboardingComplete: true, timezone: true },
         });
         if (dbUser) {
           token.unitPreference = dbUser.unitPreference as UnitPreference;
           token.name = dbUser.displayName;
           token.isAdmin = dbUser.isAdmin;
           token.onboardingComplete = dbUser.onboardingComplete;
+          token.timezone = dbUser.timezone;
         }
       }
       return token;
@@ -61,6 +63,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             unitPreference: true,
             isAdmin: true,
             onboardingComplete: true,
+            timezone: true,
           },
         });
         if (!user) return null;
@@ -78,6 +81,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           unitPreference: user.unitPreference as UnitPreference,
           isAdmin: user.isAdmin,
           onboardingComplete: user.onboardingComplete,
+          timezone: user.timezone,
         };
       },
     }),

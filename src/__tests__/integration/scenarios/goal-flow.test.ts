@@ -92,3 +92,39 @@ it("setGoalStatusAction marks goal as ACHIEVED", async () => {
   const goal = await db.goal.findUnique({ where: { id: goalId } });
   expect(goal?.status).toBe("ACHIEVED");
 });
+
+it("BODY_METRIC goal uses latest metric when multiple logged on same day", async () => {
+  const sameDate = new Date("2026-06-24");
+
+  // Create goal: lose weight from 80kg to 75kg
+  const fd = new FormData();
+  fd.set("type", "BODY_METRIC");
+  fd.set("title", "Lose weight");
+  fd.set("config", JSON.stringify({ metricType: "BODYWEIGHT", startingValue: 80, targetValue: 75 }));
+  await createGoalAction({}, fd);
+
+  const goal = await db.goal.findFirst({ where: { userId, title: "Lose weight" } });
+  expect(goal).not.toBeNull();
+
+  // Log two metrics on the same day: first 80.5kg, then 79.8kg
+  // The goal should use the second one (latest createdAt)
+  await db.bodyMetric.create({
+    data: { userId, date: sameDate, type: "BODYWEIGHT", value: 80.5 },
+  });
+
+  // Add a small delay to ensure createdAt timestamps are different
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  await db.bodyMetric.create({
+    data: { userId, date: sameDate, type: "BODYWEIGHT", value: 79.8 },
+  });
+
+  // Check progress: should use 79.8 (latest), not 80.5
+  // Progress: (79.8 - 80) / (75 - 80) * 100 = 4%
+  const progress = await computeGoalProgress(
+    { userId, type: "BODY_METRIC", config: { metricType: "BODYWEIGHT", startingValue: 80, targetValue: 75 } },
+    db,
+  );
+  expect(progress.current).toBe(79.8);
+  expect(progress.percentage).toBeCloseTo(4, 0);
+});
