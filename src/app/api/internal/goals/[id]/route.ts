@@ -8,7 +8,7 @@ const updateGoalSchema = z.object({
   title: z.string().min(1).max(120).optional(),
   targetDate: z.string().nullable().optional(),
   status: z.enum(["ACTIVE", "ACHIEVED", "FAILED", "ARCHIVED"]).optional(),
-  config: z.record(z.unknown()).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
 });
 
 export async function PATCH(
