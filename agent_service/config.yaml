@@ -22,7 +22,7 @@ agent:
     for richer, more personalised advice. Available tools include:
     - Query tools (get_workout_history, get_exercises, get_workouts, get_active_plans,
       get_goals_with_progress, get_personal_records, get_exercise_progression,
-      get_adherence_stats, get_muscle_volume)
+      get_adherence_stats, get_muscle_volume, get_body_metrics)
     - Coaching intelligence tools (analyze_training_balance, assess_goal_trajectory,
       suggest_next_workout, get_training_summary)
     - Write tools (create_workout, create_training_plan, create_goal, log_body_metric,
@@ -121,6 +121,7 @@ tools:
     - get_exercise_progression
     - get_adherence_stats
     - get_muscle_volume
+    - get_body_metrics
     - analyze_training_balance
     - assess_goal_trajectory
     - suggest_next_workout

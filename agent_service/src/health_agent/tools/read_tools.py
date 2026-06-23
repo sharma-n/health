@@ -35,6 +35,7 @@ def get_read_tools() -> list[Tool]:
         _exercise_progression_tool(),
         _adherence_stats_tool(),
         _muscle_volume_tool(),
+        _body_metrics_tool(),
     ]
 
 
@@ -385,6 +386,67 @@ def _muscle_volume_tool() -> Tool:
                         "description": "Number of weeks to include (default 8, max 52).",
                         "default": 8,
                     }
+                },
+                "required": [],
+            },
+        ),
+        handler=handler,
+    )
+
+
+def _body_metrics_tool() -> Tool:
+    async def handler(user_id: str, args: dict[str, Any]) -> str:
+        metric_type = str(args.get("metric_type", "")).strip()
+        days = int(args.get("days", 90))
+        params: dict[str, Any] = {"days": days}
+        if metric_type:
+            params["type"] = metric_type
+        result = await _get(user_id, "/api/internal/metrics", params)
+        try:
+            data = json.loads(result)
+        except Exception:
+            return result
+        if not data:
+            filter_str = f" for {metric_type}" if metric_type else ""
+            return f"No body metrics logged{filter_str} in the last {days} days."
+        lines = [f"Body metrics (last {days} days):"]
+        by_type: dict[str, list] = {}
+        for m in data:
+            by_type.setdefault(m["type"], []).append(m)
+        for mtype, entries in by_type.items():
+            lines.append(f"  {mtype}:")
+            for e in entries[:10]:
+                note_str = f" — {e['note']}" if e.get("note") else ""
+                lines.append(f"    {e['date']}: {e['value']}{note_str}")
+        return "\n".join(lines)
+
+    return Tool(
+        definition=ToolDefinition(
+            name="get_body_metrics",
+            description=(
+                "Fetch the user's logged body measurements over time "
+                "(bodyweight, waist, body fat %, etc.). "
+                "Use this to answer questions about weight trends, measurement history, "
+                "or progress toward body-composition goals."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "metric_type": {
+                        "type": "string",
+                        "description": (
+                            "Filter to one measurement type. Valid values: "
+                            "BODYWEIGHT, WAIST, HIPS, CHEST, ARM_LEFT, ARM_RIGHT, "
+                            "THIGH_LEFT, THIGH_RIGHT, CALF, NECK, BODY_FAT_PCT. "
+                            "Omit to return all types."
+                        ),
+                        "default": "",
+                    },
+                    "days": {
+                        "type": "integer",
+                        "description": "How many days back to fetch (default 90, max 365).",
+                        "default": 90,
+                    },
                 },
                 "required": [],
             },

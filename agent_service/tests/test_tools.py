@@ -57,6 +57,7 @@ def test_service_builds() -> None:
     assert "create_goal" in tool_names                # M13
     assert "log_body_metric" in tool_names            # M13
     assert "update_goal" in tool_names                # post-M13
+    assert "get_body_metrics" in tool_names           # post-M13
     # Verify system_prompt_fn is wired
     assert call_kwargs.kwargs.get("system_prompt_fn") is not None
 
@@ -546,3 +547,73 @@ async def test_get_training_summary_no_active_goals():
         result = await tool.handler("user1", {})
 
     assert "No active goals" in result
+
+
+# ---------------------------------------------------------------------------
+# get_body_metrics (post-M13)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_get_body_metrics_happy_path():
+    tool = _read_tool("get_body_metrics")
+    data = [
+        {"id": "m1", "type": "BODYWEIGHT", "value": 80.5, "date": "2026-06-24", "note": None},
+        {"id": "m2", "type": "BODYWEIGHT", "value": 81.0, "date": "2026-06-17", "note": None},
+        {"id": "m3", "type": "WAIST", "value": 88.0, "date": "2026-06-24", "note": "morning"},
+    ]
+    with patch("health_agent.tools.read_tools.http_client") as mock_client:
+        mock_client.get = AsyncMock(return_value=_resp(data))
+        result = await tool.handler("user1", {})
+
+    assert "BODYWEIGHT" in result
+    assert "80.5" in result
+    assert "WAIST" in result
+    assert "morning" in result
+
+
+@pytest.mark.asyncio
+async def test_get_body_metrics_empty():
+    tool = _read_tool("get_body_metrics")
+    with patch("health_agent.tools.read_tools.http_client") as mock_client:
+        mock_client.get = AsyncMock(return_value=_resp([]))
+        result = await tool.handler("user1", {})
+
+    assert "No body metrics" in result
+
+
+@pytest.mark.asyncio
+async def test_get_body_metrics_type_filter():
+    """Tool passes metric_type as 'type' query param and filters results."""
+    tool = _read_tool("get_body_metrics")
+    data = [{"id": "m1", "type": "BODYWEIGHT", "value": 80.5, "date": "2026-06-24", "note": None}]
+    with patch("health_agent.tools.read_tools.http_client") as mock_client:
+        mock_client.get = AsyncMock(return_value=_resp(data))
+        result = await tool.handler("user1", {"metric_type": "BODYWEIGHT", "days": 30})
+
+    # Verify the request was made with the correct query params
+    call_kwargs = mock_client.get.call_args
+    params = call_kwargs.kwargs.get("params", {})
+    assert params.get("type") == "BODYWEIGHT"
+    assert params.get("days") == 30
+    assert "BODYWEIGHT" in result
+
+
+@pytest.mark.asyncio
+async def test_get_body_metrics_http_error():
+    tool = _read_tool("get_body_metrics")
+    with patch("health_agent.tools.read_tools.http_client") as mock_client:
+        mock_client.get = AsyncMock(return_value=_resp({"error": "Unauthorized"}, status=401))
+        result = await tool.handler("user1", {})
+
+    assert "error 401" in result
+
+
+@pytest.mark.asyncio
+async def test_get_body_metrics_empty_filter_message():
+    """Empty result with a type filter mentions the type in the message."""
+    tool = _read_tool("get_body_metrics")
+    with patch("health_agent.tools.read_tools.http_client") as mock_client:
+        mock_client.get = AsyncMock(return_value=_resp([]))
+        result = await tool.handler("user1", {"metric_type": "BODY_FAT_PCT"})
+
+    assert "BODY_FAT_PCT" in result
