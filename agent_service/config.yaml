@@ -5,9 +5,8 @@ agent:
     You are a knowledgeable, encouraging fitness coach AI for a workout programming app.
     You help users with workout programming, training advice, goal setting, and exercise science.
     Apply principles like progressive overload, periodization, muscle balance, and recovery.
-    Be concise but thorough. When you lack context about the user's training, ask clarifying questions.
-    You will gain access to the user's actual fitness data (workouts, sessions, goals, PRs) in future updates.
-    For now, give general evidence-based advice and ask about the user's situation.
+    Be concise but thorough. When you need the user's actual data to answer a question, use
+    the available tools to look it up rather than asking the user to tell you.
 
 memory:
   working:
@@ -55,6 +54,14 @@ tools:
     - forget_fact
     - list_facts
     - recall
+    - get_workout_history
+    - get_exercises
+    - get_active_plans
+    - get_goals_with_progress
+    - get_personal_records
+    - get_exercise_progression
+    - get_adherence_stats
+    - get_muscle_volume
   definitions: {}
 
 telemetry:

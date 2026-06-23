@@ -59,6 +59,7 @@ roadmap (§11).** This file is the quick-start; SPEC.md is the source of truth.
 - **Muscle body heatmap visualization (post-M8): DONE** — SVG front + back body views using `react-body-highlighter` (npm), displayed across 4 locations: (1) exercise detail highlighting primary/secondary muscles, (2) workout detail showing intensity by exercise count, (3) completed session showing intensity by completed sets, (4) analytics Overview tab displaying last 7 days of muscle work. Shared `BodyMap` component maps app MuscleGroup constants to library muscle strings. `getMuscleRecentVolume()` analytics function. No migrations — pure UI layer over existing data. Build passes TypeScript.
 - **Milestone 9 (Docker Compose): DONE & verified** — `Dockerfile` (3-stage: deps/builder/runner on node:24-alpine), `docker-compose.yml` (single web service, named volume /data for SQLite), `.dockerignore` (excludes build artifacts + secrets), `docker/entrypoint.sh` (runs migrations + seed + next start). Host port configurable via `PORT` env var (defaults to 3000). Database path overridden to `file:/data/app.db` in container.
 - **Milestone 10 (AI Foundation): DONE & verified** — Python agent sidecar (`agent_service/`) using `agent_kit` + FastAPI, streaming SSE via `POST /v1/turn`. Next.js proxy at `src/app/api/agent/route.ts` (auth-gated, rate-limited per userId, validates with Zod). Chat UI: `ChatWindow` (SSE consumer), `ChatInput` (Enter-to-send), `MessageBubble`, `ToolCallBadge`. `/chat` page replaces "More" in bottom nav; "More" reachable via link in Chat header. Docker Compose extended with `agent_service` container. 5 new env vars in `.env.example`. `python-dotenv` loads `.env` automatically in the sidecar. No tools yet (M11+).
+- **Milestone 11 (Query Tools): DONE & verified** — 9 internal API routes (`src/app/api/internal/`) bridging the Python agent to Prisma data: `sessions` (with full exercise+set detail), `exercises`, `workouts`, `plans`, `goals` (with live progress via `computeGoalProgress`), `analytics/adherence`, `analytics/prs`, `analytics/progression`, `analytics/muscle-volume`. Shared `_auth.ts` helper validates `X-Internal-Secret` + `X-User-Id` headers on every route. `proxy.ts` matcher updated to exclude `api/internal` so agent requests bypass the NextAuth middleware. Python side: 8 read tools in `read_tools.py` (`get_workout_history`, `get_exercises`, `get_active_plans`, `get_goals_with_progress`, `get_personal_records`, `get_exercise_progression`, `get_adherence_stats`, `get_muscle_volume`); `service.py` switched to `AgentService.build(cfg, extra_tools=get_read_tools())`; `config.yaml` `default_allowed` updated; system prompt updated to instruct agent to use tools instead of asking the user. 37 new integration tests (274 total).
 - Remaining domain sections still render `<ComingSoon milestone="…" />` placeholder.
 
 ## Stack (note the versions — several have breaking changes vs. older training data)
@@ -98,7 +99,7 @@ npm run db:deploy      # prisma migrate deploy (apply existing; first run)
 npm run db:studio
 
 # Tests (run these before and after every change to catch regressions)
-npm run test               # all 237 tests (~7s)
+npm run test               # all 274 tests (~7s)
 npm run test:unit          # unit + validation + analytics only (~2s, no DB)
 npm run test:integration   # server action + scenario tests (~5s, in-memory DB)
 npm run test:watch         # re-run on file changes during development
@@ -157,19 +158,30 @@ src/
     (app)/   dashboard, exercises, workouts, plans, sessions, metrics,
              goals, analytics, more, profile, admin   # authed shell (header + BottomNav)
     api/auth/[...nextauth]/route.ts
+    api/agent/route.ts             # SSE proxy to Python sidecar (auth-gated)
+    api/internal/                  # internal data bridge (M11) — secret-gated, not NextAuth
+      _auth.ts                     # shared X-Internal-Secret + X-User-Id validator
+      sessions/ exercises/ workouts/ plans/ goals/route.ts
+      analytics/ adherence/ prs/ progression/ muscle-volume/route.ts
     page.tsx                       # redirects -> /dashboard
   components/  auth/, admin/, ui/ (body-map), app-shell/ (header, bottom-nav, page-header, coming-soon),
                analytics/ (stat-card, recent-prs, heatmap, bars, charts, selectors, tab-nav, muscle-map-overview)
+               chat/ (ChatWindow, ChatInput, MessageBubble, ToolCallBadge)
   lib/  db.ts, constants.ts, units.ts, actions/ (auth, admin), validation/ (auth, admin,
         exercise, workout, plan, session, body-metric, goal),
         analytics/ (goals, adherence, progression, prs, volume, dashboard, muscle-recent)
   generated/prisma/                # generated client (gitignored)
 prisma/  schema.prisma, migrations/, seed.ts
+agent_service/                     # Python sidecar (M10+)
+  config.yaml                      # agent_kit config (LLM, memory, tools)
+  src/health_agent/
+    main.py service.py             # FastAPI + AgentService bootstrap
+    tools/ client.py read_tools.py # httpx client + 8 M11 query tools
 ```
 
 ## Tests
 
-**Always run `npm run test` before committing and after any non-trivial change.** All 237 tests must pass; a red suite blocks merging. The tests are fast (~7s total) so there's no reason to skip them.
+**Always run `npm run test` before committing and after any non-trivial change.** All 274 tests must pass; a red suite blocks merging. The tests are fast (~7s total) so there's no reason to skip them.
 
 ### Structure
 
