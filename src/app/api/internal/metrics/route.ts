@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const since = new Date();
   since.setUTCDate(since.getUTCDate() - days);
 
-  const where: Parameters<typeof prisma.bodyMetric.findMany>[0]["where"] = {
+  const where: { userId: string; date: { gte: Date }; type?: string } = {
     userId,
     date: { gte: since },
   };
