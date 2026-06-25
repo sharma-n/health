@@ -7,6 +7,7 @@ import pytest
 from health_agent.service import build_service
 from health_agent.tools.coaching_tools import get_coaching_tools
 from health_agent.tools.read_tools import get_read_tools
+from health_agent.tools.write_tools import get_write_tools
 
 
 # ---------------------------------------------------------------------------
@@ -29,6 +30,11 @@ def _tool(name: str):
 def _read_tool(name: str):
     """Return the named read tool handler."""
     return next(t for t in get_read_tools() if t.definition.name == name)
+
+
+def _write_tool(name: str):
+    """Return the named write tool handler."""
+    return next(t for t in get_write_tools() if t.definition.name == name)
 
 
 # ---------------------------------------------------------------------------
@@ -58,6 +64,8 @@ def test_service_builds() -> None:
     assert "log_body_metric" in tool_names            # M13
     assert "update_goal" in tool_names                # post-M13
     assert "get_body_metrics" in tool_names           # post-M13
+    assert "log_session" in tool_names                # M14
+    assert "start_session" in tool_names              # M14
     # Verify system_prompt_fn is wired
     assert call_kwargs.kwargs.get("system_prompt_fn") is not None
 
@@ -233,18 +241,17 @@ def _goals_list(
 
 
 @pytest.mark.asyncio
-async def test_assess_goal_trajectory_on_track(freezegun_date="2025-07-01"):
+async def test_assess_goal_trajectory_on_track():
     """Goal with good progress relative to elapsed time → ON TRACK / AHEAD."""
-    from datetime import date
+    from datetime import datetime
     tool = _tool("assess_goal_trajectory")
     with patch("health_agent.tools.coaching_tools.http_client") as mock_client:
         mock_client.get = AsyncMock(return_value=_resp(
-            _goals_list(goal_id="g1", pct=60.0, target_date="2025-12-31", created_at="2025-01-01")
+            _goals_list(goal_id="g1", pct=60.0, target_date="2027-12-31", created_at="2027-01-01")
         ))
-        # Patch today's date so the arithmetic is deterministic
-        with patch("health_agent.tools.coaching_tools.date") as mock_date:
-            mock_date.today.return_value = date(2025, 7, 1)
-            mock_date.fromisoformat = date.fromisoformat
+        # Patch _local_now (what the code actually calls) so arithmetic is deterministic
+        with patch("health_agent.tools.coaching_tools._local_now") as mock_now:
+            mock_now.return_value = datetime(2027, 7, 1, 12, 0)
             result = await tool.handler("user1", {"goal_id": "g1"})
 
     assert "Bench 100 kg" in result
@@ -255,16 +262,15 @@ async def test_assess_goal_trajectory_on_track(freezegun_date="2025-07-01"):
 @pytest.mark.asyncio
 async def test_assess_goal_trajectory_at_risk():
     """Slow progress relative to deadline → AT RISK."""
-    from datetime import date
+    from datetime import datetime
     tool = _tool("assess_goal_trajectory")
     with patch("health_agent.tools.coaching_tools.http_client") as mock_client:
         mock_client.get = AsyncMock(return_value=_resp(
             # Only 10% done in first 6 months of a 12-month goal
-            _goals_list(goal_id="g1", pct=10.0, target_date="2025-12-31", created_at="2025-01-01")
+            _goals_list(goal_id="g1", pct=10.0, target_date="2027-12-31", created_at="2027-01-01")
         ))
-        with patch("health_agent.tools.coaching_tools.date") as mock_date:
-            mock_date.today.return_value = date(2025, 7, 1)
-            mock_date.fromisoformat = date.fromisoformat
+        with patch("health_agent.tools.coaching_tools._local_now") as mock_now:
+            mock_now.return_value = datetime(2027, 7, 1, 12, 0)
             result = await tool.handler("user1", {"goal_id": "g1"})
 
     assert "AT RISK" in result
@@ -354,7 +360,7 @@ VOLUME_2W = {
 
 @pytest.mark.asyncio
 async def test_suggest_next_workout_follows_plan():
-    from datetime import date
+    from datetime import datetime
     tool = _tool("suggest_next_workout")
     with patch("health_agent.tools.coaching_tools.http_client") as mock_client:
         mock_client.get = AsyncMock(side_effect=[
@@ -362,10 +368,9 @@ async def test_suggest_next_workout_follows_plan():
             _resp(VOLUME_2W),             # muscle-volume
             _resp(ADHERENCE_DATA),        # adherence
         ])
-        # Monday = weekday 0 → day_idx = 1
-        with patch("health_agent.tools.coaching_tools.date") as mock_date:
-            mock_date.today.return_value = date(2025, 6, 23)  # Monday
-            mock_date.fromisoformat = date.fromisoformat
+        # Monday = weekday() 0 → day_idx = 1; 2027-06-21 is a Monday
+        with patch("health_agent.tools.coaching_tools._local_now") as mock_now:
+            mock_now.return_value = datetime(2027, 6, 21, 8, 0)
             result = await tool.handler("user1", {})
 
     assert "Push Day" in result
@@ -617,3 +622,213 @@ async def test_get_body_metrics_empty_filter_message():
         result = await tool.handler("user1", {"metric_type": "BODY_FAT_PCT"})
 
     assert "BODY_FAT_PCT" in result
+
+
+# ---------------------------------------------------------------------------
+# M14 — log_session
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_log_session_happy_path():
+    """log_session resolves exercise names, translates to camelCase, posts session."""
+    tool = _write_tool("log_session")
+    exercises_data = [{"id": "ex1", "name": "Bench Press"}]
+    session_data = {"id": "sess1"}
+
+    with patch("health_agent.tools.write_tools.http_client") as mock_client:
+        mock_client.get = AsyncMock(return_value=_resp(exercises_data))
+        mock_client.post = AsyncMock(return_value=_resp(session_data, status=201))
+
+        result = await tool.handler("user1", {
+            "exercises": [
+                {"exercise_name": "Bench Press", "sets": [{"weight_kg": 80, "reps": 8}]},
+            ],
+            "date": "2026-06-24",
+        })
+
+    assert "sess1" in result
+    assert "2026-06-24" in result
+
+    post_call = mock_client.post.call_args
+    payload = post_call.kwargs["json"]
+    assert payload["date"] == "2026-06-24"
+    assert payload["exercises"][0]["exerciseId"] == "ex1"
+    assert payload["exercises"][0]["sets"][0]["weightKg"] == 80
+    assert payload["exercises"][0]["sets"][0]["reps"] == 8
+    assert "weight_kg" not in payload["exercises"][0]["sets"][0]
+
+
+@pytest.mark.asyncio
+async def test_log_session_with_base_workout_name():
+    """log_session with base_workout_name resolves workoutId and includes it in payload."""
+    tool = _write_tool("log_session")
+    workouts = [{"id": "wk1", "name": "Push Day"}]
+    exercises_data = [{"id": "ex1", "name": "Bench Press"}]
+    session_data = {"id": "sess2"}
+
+    with patch("health_agent.tools.write_tools.http_client") as mock_client:
+        mock_client.get = AsyncMock(side_effect=[
+            _resp(workouts),        # GET /api/internal/workouts
+            _resp(exercises_data),  # GET /api/internal/exercises (resolve)
+        ])
+        mock_client.post = AsyncMock(return_value=_resp(session_data, status=201))
+
+        result = await tool.handler("user1", {
+            "exercises": [{"exercise_name": "Bench Press", "sets": [{"reps": 8}]}],
+            "date": "2026-06-24",
+            "base_workout_name": "Push Day",
+        })
+
+    assert "sess2" in result
+    post_call = mock_client.post.call_args
+    payload = post_call.kwargs["json"]
+    assert payload.get("workoutId") == "wk1"
+
+
+@pytest.mark.asyncio
+async def test_log_session_unresolvable_exercise():
+    """log_session returns an error listing unresolvable exercise names."""
+    tool = _write_tool("log_session")
+
+    with patch("health_agent.tools.write_tools.http_client") as mock_client:
+        mock_client.get = AsyncMock(return_value=_resp([]))  # no match
+        result = await tool.handler("user1", {
+            "exercises": [{"exercise_name": "Made Up Exercise", "sets": [{"reps": 5}]}],
+            "date": "2026-06-24",
+        })
+
+    assert "error" in result
+    assert "Made Up Exercise" in result
+    assert "get_exercises" in result
+
+
+@pytest.mark.asyncio
+async def test_log_session_base_workout_not_found():
+    """log_session returns error when base_workout_name doesn't match any workout."""
+    tool = _write_tool("log_session")
+
+    with patch("health_agent.tools.write_tools.http_client") as mock_client:
+        mock_client.get = AsyncMock(return_value=_resp([]))  # empty workouts list
+        result = await tool.handler("user1", {
+            "exercises": [{"exercise_name": "Bench Press", "sets": [{"reps": 8}]}],
+            "base_workout_name": "Nonexistent Workout",
+        })
+
+    assert "error" in result
+    assert "Nonexistent Workout" in result
+    assert "get_workouts" in result
+
+
+@pytest.mark.asyncio
+async def test_log_session_missing_exercises():
+    """log_session returns error immediately when exercises list is empty."""
+    tool = _write_tool("log_session")
+
+    result = await tool.handler("user1", {"date": "2026-06-24"})
+    assert "error" in result
+
+
+# ---------------------------------------------------------------------------
+# M14 — start_session
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_start_session_happy_path():
+    """start_session resolves exercise names, posts to sessions/start, returns link."""
+    tool = _write_tool("start_session")
+    exercises_data = [{"id": "ex1", "name": "Squat"}]
+    session_data = {"sessionId": "live1", "sessionUrl": "/sessions/live1"}
+
+    with patch("health_agent.tools.write_tools.http_client") as mock_client:
+        mock_client.get = AsyncMock(return_value=_resp(exercises_data))
+        mock_client.post = AsyncMock(return_value=_resp(session_data, status=201))
+
+        result = await tool.handler("user1", {"exercises": ["Squat"]})
+
+    assert "/sessions/live1" in result
+    assert "Squat" in result
+
+    post_call = mock_client.post.call_args
+    payload = post_call.kwargs["json"]
+    assert "ex1" in payload["exerciseIds"]
+
+
+@pytest.mark.asyncio
+async def test_start_session_with_workout_name():
+    """start_session with workout_name resolves workoutId and includes it in payload."""
+    tool = _write_tool("start_session")
+    workouts = [{"id": "wk2", "name": "Legs Day"}]
+    exercises_data = [{"id": "ex2", "name": "Squat"}]
+    session_data = {"sessionId": "live2", "sessionUrl": "/sessions/live2"}
+
+    with patch("health_agent.tools.write_tools.http_client") as mock_client:
+        mock_client.get = AsyncMock(side_effect=[
+            _resp(workouts),        # GET /api/internal/workouts
+            _resp(exercises_data),  # GET /api/internal/exercises (resolve)
+        ])
+        mock_client.post = AsyncMock(return_value=_resp(session_data, status=201))
+
+        result = await tool.handler("user1", {
+            "exercises": ["Squat"],
+            "workout_name": "Legs Day",
+        })
+
+    post_call = mock_client.post.call_args
+    payload = post_call.kwargs["json"]
+    assert payload.get("workoutId") == "wk2"
+    assert "/sessions/live2" in result
+
+
+@pytest.mark.asyncio
+async def test_start_session_unresolvable_exercise():
+    """start_session returns error when an exercise name can't be resolved."""
+    tool = _write_tool("start_session")
+
+    with patch("health_agent.tools.write_tools.http_client") as mock_client:
+        mock_client.get = AsyncMock(return_value=_resp([]))
+        result = await tool.handler("user1", {"exercises": ["Fake Exercise"]})
+
+    assert "error" in result
+    assert "Fake Exercise" in result
+    assert "get_exercises" in result
+
+
+@pytest.mark.asyncio
+async def test_start_session_workout_not_found():
+    """start_session returns error when workout_name doesn't match any workout."""
+    tool = _write_tool("start_session")
+
+    with patch("health_agent.tools.write_tools.http_client") as mock_client:
+        mock_client.get = AsyncMock(return_value=_resp([]))
+        result = await tool.handler("user1", {
+            "exercises": ["Squat"],
+            "workout_name": "Ghost Workout",
+        })
+
+    assert "error" in result
+    assert "Ghost Workout" in result
+    assert "get_workouts" in result
+
+
+@pytest.mark.asyncio
+async def test_start_session_missing_exercises():
+    """start_session returns error immediately when exercises list is empty."""
+    tool = _write_tool("start_session")
+    result = await tool.handler("user1", {})
+    assert "error" in result
+
+
+@pytest.mark.asyncio
+async def test_start_session_link_contains_base_url():
+    """start_session result link uses NEXTJS_BASE_URL from client module."""
+    tool = _write_tool("start_session")
+    exercises_data = [{"id": "ex1", "name": "Bench Press"}]
+    session_data = {"sessionId": "live3", "sessionUrl": "/sessions/live3"}
+
+    with patch("health_agent.tools.write_tools.http_client") as mock_client:
+        mock_client.get = AsyncMock(return_value=_resp(exercises_data))
+        mock_client.post = AsyncMock(return_value=_resp(session_data, status=201))
+
+        result = await tool.handler("user1", {"exercises": ["Bench Press"]})
+
+    assert "http://localhost:3000/sessions/live3" in result

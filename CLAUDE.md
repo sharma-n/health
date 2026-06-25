@@ -92,6 +92,20 @@ roadmap (§11).** This file is the quick-start; SPEC.md is the source of truth.
   rule: only call when the user explicitly asks to create a new exercise by name; during workout
   creation, silently substitute via `get_exercises` instead of calling this tool. 12 new JS tests
   + 6 new Python tests; all pass (311 JS / 50 Python).
+- **Milestone 14 (Ad-hoc Session Logging): DONE & verified** — two session write paths:
+  (1) **Atomic (historical):** `POST /api/internal/sessions` — agent collects all exercises+sets,
+  confirms with user, posts one completed session in a single `prisma.$transaction`
+  (startedAt=endedAt=UTC midnight of the provided date, all sets `completed:true`). (2) **Live
+  (start-and-hand-off):** `GET /api/internal/workouts/[id]` (new — returns template exercise list
+  so agent can show/modify without touching the saved workout) + `POST /api/internal/sessions/start`
+  (new — creates in-progress session with `endedAt:null`, pre-populates from explicit `exerciseIds`
+  list rather than auto-expanding workoutId, enabling substitutions). Agent returns a markdown link
+  `[Start logging →]({NEXTJS_BASE_URL}/sessions/{id})` — user logs sets in the app's native UI.
+  Python: `log_session` + `start_session` tools in `write_tools.py`; `config.yaml` updated
+  (`default_allowed` + write confirmation guidance). 40 new JS tests + 11 new Python tests; all pass
+  (351 JS / 73 Python). Also fixed 3 pre-existing Python test failures in coaching tools — tests
+  were patching `date.today` but the code calls `_local_now().date()`; fixed by patching
+  `_local_now` directly and updating mock goal dates to future years.
 - Remaining domain sections still render `<ComingSoon milestone="…" />` placeholder.
 
 ## Stack (note the versions — several have breaking changes vs. older training data)
@@ -133,7 +147,7 @@ npm run db:dev-seed    # wipe all users + create demo account with sample data (
 npm run db:studio
 
 # Tests (run these before and after every change to catch regressions)
-npm run test               # all 311 tests (~7s)
+npm run test               # all 351 tests (~7s)
 npm run test:unit          # unit + validation + analytics only (~2s, no DB)
 npm run test:integration   # server action + scenario tests (~5s, in-memory DB)
 npm run test:watch         # re-run on file changes during development
@@ -196,6 +210,8 @@ src/
     api/internal/                  # internal data bridge (M11+) — secret-gated, not NextAuth
       _auth.ts                     # shared X-Internal-Secret + X-User-Id validator
       sessions/ exercises/ workouts/ plans/ goals/ metrics/route.ts
+      sessions/start/route.ts      # POST: create in-progress session (M14)
+      workouts/[id]/route.ts       # GET: single workout with exercises (M14)
       analytics/ adherence/ prs/ progression/ muscle-volume/route.ts
       # workouts, plans, goals, exercises also have POST handlers (M13+)
     page.tsx                       # redirects -> /dashboard
@@ -211,12 +227,12 @@ agent_service/                     # Python sidecar (M10+)
   config.yaml                      # agent_kit config (LLM, memory, tools)
   src/health_agent/
     main.py service.py             # FastAPI + AgentService bootstrap
-    tools/ client.py read_tools.py coaching_tools.py write_tools.py  # httpx client + 9 read tools (M11+pre-M13) + 4 coaching tools (M12) + 6 write tools (M13+)
+    tools/ client.py read_tools.py coaching_tools.py write_tools.py  # httpx client + 9 read tools (M11+pre-M13) + 4 coaching tools (M12) + 8 write tools (M13+M14)
 ```
 
 ## Tests
 
-**Always run `npm run test` before committing and after any non-trivial change.** All 311 tests must pass; a red suite blocks merging. The tests are fast (~7s total) so there's no reason to skip them.
+**Always run `npm run test` before committing and after any non-trivial change.** All 351 tests must pass; a red suite blocks merging. The tests are fast (~7s total) so there's no reason to skip them.
 
 ### Structure
 
@@ -258,6 +274,30 @@ src/__tests__/
 - Weights stored canonically in **kg**, lengths in **cm**; convert at display only.
 - All data scoped per `userId`; system/seed exercises are the only shared rows.
 - Zod-validate every server action input; reuse schemas client + server.
+
+### Dates & timestamps
+
+- **All `DateTime` columns stored as UTC** in SQLite. Date-only fields (plan `startDate`/`endDate`,
+  goal `targetDate`, session `date`) are stored as **UTC midnight** — e.g. `new Date("2026-06-24")`
+  produces `2026-06-24T00:00:00.000Z`.
+- **Display** — `formatDateOnly()` in `src/lib/dates.ts` reconstructs a local-timezone Date from
+  the UTC-midnight value so `"June 24"` always renders correctly regardless of the viewer's timezone.
+  Never rely on `.toLocaleDateString()` directly on a raw Prisma DateTime.
+- **User timezone** — each user has a `timezone` field (IANA string, e.g. `"America/New_York"`).
+  The Next.js agent proxy injects `X-User-Timezone` on every request to the Python sidecar. The
+  sidecar stores it in a `user_timezone` ContextVar (`health_agent/context.py`) for the duration
+  of that turn.
+- **Agent timezone awareness** — `_system_prompt_fn` in `service.py` reads `user_timezone` and
+  injects *"Today's date is Wednesday, 2026-06-25. User's timezone: America/New_York."* at the top
+  of every system prompt. `_today_str()` in `write_tools.py` reads the same ContextVar to compute
+  today's date in the user's local timezone (used as default for `date` params).
+- **Python coaching tools** use `_local_now()` (in `coaching_tools.py`) — returns `datetime.now(tz)`
+  for the user's timezone. **Do not mock `date.today` in tests for these tools** — it is never
+  called. Mock `health_agent.tools.coaching_tools._local_now` instead, returning a `datetime`
+  object: `mock_now.return_value = datetime(2027, 7, 1, 12, 0)`.
+- **Agent date rule** — when the user says "yesterday" or a weekday name, the agent interprets it
+  in the user's local timezone (already injected). Write tools accept `YYYY-MM-DD` strings and
+  store them as UTC midnight; no conversion needed at the tool boundary.
 
 ## Security
 

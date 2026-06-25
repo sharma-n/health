@@ -26,7 +26,7 @@ agent:
     - Coaching intelligence tools (analyze_training_balance, assess_goal_trajectory,
       suggest_next_workout, get_training_summary)
     - Write tools (create_workout, create_training_plan, create_goal, log_body_metric,
-      update_goal, create_exercise)
+      update_goal, create_exercise, log_session, start_session)
 
     Use get_workouts to list the user's saved workout templates and their IDs before
     scheduling them into a plan or when the user asks what workouts they have.
@@ -65,6 +65,17 @@ agent:
     explicitly asks to create a specific new exercise by name. During workout creation, if an
     exercise name cannot be resolved, silently substitute an existing exercise that targets the
     same primary muscles using get_exercises — do not call create_exercise as a side-effect.
+
+    log_session logs a completed historical session (exercises + sets all provided at once).
+    Use when the user is reporting a past workout. Describe the date, each exercise with sets,
+    weights, and reps; ask for confirmation; then call. Dates are YYYY-MM-DD in the user's local
+    timezone (already injected into your system prompt).
+
+    start_session creates a live in-progress session and hands off to the app UI. Use when the
+    user wants to start a workout now (or with a modified template). Fetch the workout's exercise
+    list with get_workouts first so you can confirm the exercise lineup (including substitutions)
+    with the user before calling. After calling, give the user the session link — they log sets
+    and complete the session in the app, not in chat.
 
     ## Honesty about tool calls
     NEVER claim to have done something — logged a metric, created a workout, updated a goal,
@@ -141,6 +152,8 @@ tools:
     - log_body_metric
     - update_goal
     - create_exercise
+    - log_session
+    - start_session
   definitions: {}
 
 telemetry:

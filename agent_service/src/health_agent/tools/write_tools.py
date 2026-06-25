@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from llm_kit import ToolDefinition
 from agent_kit.tools.base import Tool
 
-from health_agent.tools.client import http_client
+from health_agent.tools.client import http_client, NEXTJS_BASE_URL
 from health_agent.context import user_timezone
 
 
@@ -99,6 +99,8 @@ def get_write_tools() -> list[Tool]:
         _log_body_metric_tool(),
         _update_goal_tool(),
         _create_exercise_tool(),
+        _log_session_tool(),
+        _start_session_tool(),
     ]
 
 
@@ -535,6 +537,241 @@ def _create_exercise_tool() -> Tool:
                     },
                 },
                 "required": ["name", "equipment", "primary_muscles"],
+            },
+        ),
+        handler=handler,
+    )
+
+
+def _log_session_tool() -> Tool:
+    async def handler(user_id: str, args: dict[str, Any]) -> str:
+        exercises_raw: list[dict] = args.get("exercises", [])
+        if not exercises_raw:
+            return "error: exercises is required and must have at least one entry"
+
+        log_date = str(args.get("date") or _today_str()).strip()
+        notes = str(args.get("notes") or "").strip() or None
+        overall_effort = args.get("overall_effort")
+        base_workout_name = str(args.get("base_workout_name") or "").strip() or None
+        workout_id_for_post: str | None = None
+
+        if base_workout_name:
+            workouts_raw = await _get(user_id, "/api/internal/workouts")
+            try:
+                workouts: list[dict] = json.loads(workouts_raw)
+            except Exception:
+                return f"error fetching workouts: {workouts_raw}"
+            workout_id_for_post = await _resolve_workout_id(user_id, base_workout_name, workouts)
+            if workout_id_for_post is None:
+                return f"error: workout '{base_workout_name}' not found. Use get_workouts to list saved workouts."
+
+        resolved: list[dict] = []
+        unresolved: list[str] = []
+        for ex in exercises_raw:
+            ex_name = str(ex.get("exercise_name", "")).strip()
+            if not ex_name:
+                continue
+            ex_id = await _resolve_exercise_id(user_id, ex_name)
+            if ex_id is None:
+                unresolved.append(ex_name)
+            else:
+                sets = [
+                    {k: v for k, v in {
+                        "weightKg": s.get("weight_kg"),
+                        "reps": s.get("reps"),
+                        "restSeconds": s.get("rest_seconds"),
+                    }.items() if v is not None}
+                    for s in ex.get("sets", [])
+                ]
+                resolved.append({"exerciseId": ex_id, "sets": sets})
+
+        if unresolved:
+            return f"error: could not find exercises: {', '.join(unresolved)}. Use get_exercises to search."
+
+        payload: dict[str, Any] = {"date": log_date, "exercises": resolved}
+        if notes:
+            payload["notes"] = notes
+        if overall_effort is not None:
+            payload["overallEffort"] = int(overall_effort)
+        if workout_id_for_post:
+            payload["workoutId"] = workout_id_for_post
+
+        status, text = await _post(user_id, "/api/internal/sessions", payload)
+        if status not in (200, 201):
+            return f"error {status}: {text[:200]}"
+
+        try:
+            result = json.loads(text)
+            template_note = f" (based on '{base_workout_name}')" if base_workout_name else ""
+            return f"Logged session on {log_date}{template_note} (id: {result['id']}) with {len(resolved)} exercise(s)."
+        except Exception:
+            return f"Logged session on {log_date}."
+
+    return Tool(
+        definition=ToolDefinition(
+            name="log_session",
+            description=(
+                "Log a completed historical workout session with exercises and sets. "
+                "Use when the user is reporting a past workout (e.g. 'log yesterday's push day'). "
+                "If base_workout_name is provided, the session is linked to that template in the DB. "
+                "Always describe the date, exercises, and sets; ask for confirmation before calling. "
+                "Dates must be YYYY-MM-DD in the user's local timezone (already in your system prompt)."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "exercises": {
+                        "type": "array",
+                        "description": "Exercises performed, in order. At least one required.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "exercise_name": {"type": "string", "description": "Exercise name (used to look up ID)."},
+                                "sets": {
+                                    "type": "array",
+                                    "description": "Sets performed. At least one required.",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "weight_kg": {"type": "number", "description": "Weight in kg."},
+                                            "reps": {"type": "integer", "description": "Reps performed."},
+                                            "rest_seconds": {"type": "integer", "description": "Rest after this set in seconds."},
+                                        },
+                                    },
+                                },
+                            },
+                            "required": ["exercise_name", "sets"],
+                        },
+                    },
+                    "date": {
+                        "type": "string",
+                        "description": "Session date in YYYY-MM-DD (user's local timezone). Defaults to today.",
+                        "default": "",
+                    },
+                    "notes": {
+                        "type": "string",
+                        "description": "Optional session notes.",
+                        "default": "",
+                    },
+                    "overall_effort": {
+                        "type": "integer",
+                        "description": "Session RPE 1-10.",
+                    },
+                    "base_workout_name": {
+                        "type": "string",
+                        "description": "If the session was based on a saved workout template, provide its name here to link the session to that template.",
+                        "default": "",
+                    },
+                },
+                "required": ["exercises"],
+            },
+        ),
+        handler=handler,
+    )
+
+
+def _start_session_tool() -> Tool:
+    async def handler(user_id: str, args: dict[str, Any]) -> str:
+        exercise_names: list[str] = args.get("exercises", [])
+        if not exercise_names:
+            return "error: exercises is required and must have at least one entry"
+
+        workout_name = str(args.get("workout_name") or "").strip() or None
+        plan_name = str(args.get("plan_name") or "").strip() or None
+        workout_id_for_post: str | None = None
+        plan_id_for_post: str | None = None
+
+        if workout_name:
+            workouts_raw = await _get(user_id, "/api/internal/workouts")
+            try:
+                workouts: list[dict] = json.loads(workouts_raw)
+            except Exception:
+                return f"error fetching workouts: {workouts_raw}"
+            workout_id_for_post = await _resolve_workout_id(user_id, workout_name, workouts)
+            if workout_id_for_post is None:
+                return f"error: workout '{workout_name}' not found. Use get_workouts to list saved workouts."
+
+        if plan_name:
+            plans_raw = await _get(user_id, "/api/internal/plans", {"status": "ACTIVE"})
+            try:
+                plans: list[dict] = json.loads(plans_raw)
+            except Exception:
+                return f"error fetching plans: {plans_raw}"
+            plan_name_lower = plan_name.lower()
+            matched_plan = next((p for p in plans if p.get("name", "").lower() == plan_name_lower), None)
+            if matched_plan is None:
+                return f"error: active plan '{plan_name}' not found. Use get_active_plans to list plans."
+            plan_id_for_post = matched_plan["id"]
+
+        resolved_ids: list[str] = []
+        unresolved: list[str] = []
+        for name in exercise_names:
+            name = str(name).strip()
+            if not name:
+                continue
+            ex_id = await _resolve_exercise_id(user_id, name)
+            if ex_id is None:
+                unresolved.append(name)
+            else:
+                resolved_ids.append(ex_id)
+
+        if unresolved:
+            return f"error: could not find exercises: {', '.join(unresolved)}. Use get_exercises to search."
+
+        payload: dict[str, Any] = {"exerciseIds": resolved_ids}
+        if workout_id_for_post:
+            payload["workoutId"] = workout_id_for_post
+        if plan_id_for_post:
+            payload["planId"] = plan_id_for_post
+
+        status, text = await _post(user_id, "/api/internal/sessions/start", payload)
+        if status not in (200, 201):
+            return f"error {status}: {text[:200]}"
+
+        try:
+            result = json.loads(text)
+            session_url = result.get("sessionUrl", "")
+            full_url = f"{NEXTJS_BASE_URL}{session_url}"
+            exercises_list = ", ".join(exercise_names)
+            return (
+                f"Session started! Open the logger to track your sets:\n\n"
+                f"[Start logging →]({full_url})\n\n"
+                f"Exercises loaded: {exercises_list}. "
+                f"When you're done, complete the session in the app."
+            )
+        except Exception:
+            return "Session started! Open the app to continue logging."
+
+    return Tool(
+        definition=ToolDefinition(
+            name="start_session",
+            description=(
+                "Start a new live workout session and pre-load exercises into the app's logger. "
+                "Returns a link the user clicks to open the session — they log sets and complete it in the app, not in chat. "
+                "Use get_workouts + GET /api/internal/workouts/{id} first to see the exercise list if the user named a workout template. "
+                "Confirm the exercise lineup (including any substitutions) with the user before calling. "
+                "If the user wants to log a past session instead, use log_session."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "exercises": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Ordered list of exercise names to pre-load. At least one required.",
+                    },
+                    "workout_name": {
+                        "type": "string",
+                        "description": "If based on a saved workout template, its name (links session for analytics).",
+                        "default": "",
+                    },
+                    "plan_name": {
+                        "type": "string",
+                        "description": "If part of an active plan, the plan name (links session for adherence tracking).",
+                        "default": "",
+                    },
+                },
+                "required": ["exercises"],
             },
         ),
         handler=handler,
