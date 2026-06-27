@@ -22,7 +22,7 @@ agent:
     for richer, more personalised advice. Available tools include:
     - Query tools (get_workout_history, get_exercises, get_workouts, get_active_plans,
       get_goals_with_progress, get_personal_records, get_exercise_progression,
-      get_adherence_stats, get_muscle_volume, get_body_metrics)
+      get_adherence_stats, get_muscle_volume, get_body_metrics, get_plan_adherence)
     - Coaching intelligence tools (analyze_training_balance, assess_goal_trajectory,
       suggest_next_workout, get_training_summary)
     - Write tools (create_workout, create_training_plan, create_goal, log_body_metric,
@@ -75,7 +75,15 @@ agent:
     user wants to start a workout now (or with a modified template). Fetch the workout's exercise
     list with get_workouts first so you can confirm the exercise lineup (including substitutions)
     with the user before calling. After calling, give the user the session link — they log sets
-    and complete the session in the app, not in chat.
+    and complete the session in the app, not in chat. When starting a session for a specific plan
+    day, pass plan_name AND scheduled_date (the date the workout was scheduled for, not today's
+    date if doing a makeup session) so the session correctly counts toward plan adherence.
+
+    get_plan_adherence fetches per-occurrence adherence for a training plan: completed, missed,
+    and upcoming sessions with an overall adherence percentage, plus this week's day-by-day status.
+    Use this when the user asks how they are doing on their plan, what they missed, or when
+    providing adherence-based coaching feedback. Call it proactively alongside get_training_summary
+    if the user has an active plan.
 
     ## Never fabricate data
     Every number, date, exercise name, set count, weight, and session detail you state must come
@@ -156,6 +164,7 @@ tools:
     - get_adherence_stats
     - get_muscle_volume
     - get_body_metrics
+    - get_plan_adherence
     - analyze_training_balance
     - assess_goal_trajectory
     - suggest_next_workout

@@ -7,6 +7,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 const startSessionSchema = z.object({
   workoutId: z.string().optional(),
   planId: z.string().optional(),
+  scheduledDate: z.string().datetime().optional(),
   exerciseIds: z.array(z.string().min(1)).optional(),
 });
 
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { workoutId, planId, exerciseIds } = parsed.data;
+  const { workoutId, planId, scheduledDate, exerciseIds } = parsed.data;
 
   if (workoutId) {
     const workout = await prisma.workout.findFirst({ where: { id: workoutId, ownerId: userId }, select: { id: true } });
@@ -52,6 +53,7 @@ export async function POST(req: NextRequest) {
           userId,
           workoutId: workoutId ?? null,
           planId: planId ?? null,
+          scheduledDate: scheduledDate ? new Date(scheduledDate) : null,
           startedAt: new Date(),
           endedAt: null,
         },

@@ -7,8 +7,11 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { PlanDeleteForm } from "@/components/plans/plan-delete-form";
 import { PlanStatusForm } from "@/components/plans/plan-status-form";
+import { PlanAdherenceSection } from "@/components/plans/plan-adherence-section";
 import type { PlanStatus } from "@/lib/constants";
 import { formatDateOnly } from "@/lib/dates";
+import { getPlanAdherence } from "@/lib/analytics/plan-adherence";
+import type { PlanAdherenceResult } from "@/lib/analytics/plan-adherence";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -79,6 +82,15 @@ export default async function PlanDetailPage({
   const status = plan.status as PlanStatus;
   const scheduleByDay = new Map(plan.schedule.map((s) => [s.dayOfWeek, s.workout]));
 
+  let adherence: PlanAdherenceResult | null = null;
+  if (status === "ACTIVE" || status === "COMPLETED") {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { timezone: true },
+    });
+    adherence = await getPlanAdherence(plan.id, userId, prisma, user?.timezone ?? "UTC");
+  }
+
   return (
     <div>
       <div className="mb-5 flex items-start justify-between gap-3">
@@ -111,6 +123,14 @@ export default async function PlanDetailPage({
           <div className="rounded-[var(--radius-app)] border border-border bg-surface p-4">
             <p className="text-sm text-foreground">{plan.description}</p>
           </div>
+        ) : null}
+
+        {adherence ? (
+          <PlanAdherenceSection
+            adherence={adherence}
+            scheduleByDay={scheduleByDay}
+            isActive={status === "ACTIVE"}
+          />
         ) : null}
 
         <div className="rounded-[var(--radius-app)] border border-border bg-surface p-4">

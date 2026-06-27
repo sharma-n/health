@@ -680,6 +680,7 @@ def _start_session_tool() -> Tool:
         plan_name = str(args.get("plan_name") or "").strip() or None
         workout_id_for_post: str | None = None
         plan_id_for_post: str | None = None
+        scheduled_date = str(args.get("scheduled_date") or "").strip() or None
 
         if workout_name:
             workouts_raw = await _get(user_id, "/api/internal/workouts")
@@ -703,6 +704,12 @@ def _start_session_tool() -> Tool:
                 return f"error: active plan '{plan_name}' not found. Use get_active_plans to list plans."
             plan_id_for_post = matched_plan["id"]
 
+        if scheduled_date:
+            try:
+                date.fromisoformat(scheduled_date)
+            except ValueError:
+                return f"error: scheduled_date '{scheduled_date}' is not a valid YYYY-MM-DD date."
+
         resolved_ids: list[str] = []
         unresolved: list[str] = []
         for name in exercise_names:
@@ -723,6 +730,8 @@ def _start_session_tool() -> Tool:
             payload["workoutId"] = workout_id_for_post
         if plan_id_for_post:
             payload["planId"] = plan_id_for_post
+        if scheduled_date:
+            payload["scheduledDate"] = scheduled_date + "T00:00:00Z"
 
         status, text = await _post(user_id, "/api/internal/sessions/start", payload)
         if status not in (200, 201):
@@ -768,6 +777,15 @@ def _start_session_tool() -> Tool:
                     "plan_name": {
                         "type": "string",
                         "description": "If part of an active plan, the plan name (links session for adherence tracking).",
+                        "default": "",
+                    },
+                    "scheduled_date": {
+                        "type": "string",
+                        "description": (
+                            "The date this session was scheduled for in the plan (YYYY-MM-DD, user's local timezone). "
+                            "Provide when plan_name is also given so the session counts toward plan adherence tracking. "
+                            "For example, if the user is doing their Monday workout on Tuesday, pass Monday's date."
+                        ),
                         "default": "",
                     },
                 },

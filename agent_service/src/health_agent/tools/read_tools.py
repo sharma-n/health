@@ -36,6 +36,7 @@ def get_read_tools() -> list[Tool]:
         _adherence_stats_tool(),
         _muscle_volume_tool(),
         _body_metrics_tool(),
+        _plan_adherence_tool(),
     ]
 
 
@@ -385,6 +386,103 @@ def _muscle_volume_tool() -> Tool:
                         "type": "integer",
                         "description": "Number of weeks to include (default 8, max 52).",
                         "default": 8,
+                    }
+                },
+                "required": [],
+            },
+        ),
+        handler=handler,
+    )
+
+
+def _plan_adherence_tool() -> Tool:
+    async def handler(user_id: str, args: dict[str, Any]) -> str:
+        plan_name = str(args.get("plan_name", "")).strip()
+
+        # Fetch all active (and completed) plans to resolve name → ID
+        all_plans: list[dict] = []
+        for status in ("ACTIVE", "COMPLETED"):
+            raw = await _get(user_id, "/api/internal/plans", {"status": status})
+            try:
+                all_plans.extend(json.loads(raw))
+            except Exception:
+                pass
+
+        if not all_plans:
+            return "No active or completed plans found."
+
+        plan_id: str | None = None
+        resolved_plan_name: str = ""
+        if plan_name:
+            plan_name_lower = plan_name.lower()
+            match = next((p for p in all_plans if p.get("name", "").lower() == plan_name_lower), None)
+            if match is None:
+                names = ", ".join(f"'{p['name']}'" for p in all_plans)
+                return f"Plan '{plan_name}' not found. Available plans: {names}."
+            plan_id = match["id"]
+            resolved_plan_name = match["name"]
+        else:
+            # Default to first active plan
+            plan_id = all_plans[0]["id"]
+            resolved_plan_name = all_plans[0]["name"]
+
+        result = await _get(
+            user_id, "/api/internal/analytics/plan-adherence", {"planId": plan_id}
+        )
+        try:
+            d = json.loads(result)
+        except Exception:
+            return result
+
+        overall = d.get("overall", {})
+        adherence_pct = overall.get("adherencePct")
+        adherence_str = f"{adherence_pct}%" if adherence_pct is not None else "N/A (no past occurrences yet)"
+
+        lines = [
+            f"Plan adherence for '{resolved_plan_name}':",
+            f"  Completed: {overall.get('completed', 0)} sessions",
+            f"  Missed:    {overall.get('missed', 0)} sessions",
+            f"  Upcoming:  {overall.get('upcoming', 0)} sessions",
+            f"  Adherence: {adherence_str}",
+        ]
+
+        day_names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        this_week = d.get("thisWeek", [])
+        if this_week:
+            lines.append("  This week:")
+            for occ in this_week:
+                dow = day_names[occ["dayOfWeek"]]
+                status = occ["status"]
+                badge = {
+                    "completed": "✓ Done",
+                    "completed_late": "✓ Done (late)",
+                    "completed_early": "✓ Done (early)",
+                    "missed": "✗ Missed",
+                    "upcoming": "Scheduled",
+                }.get(status, status)
+                lines.append(f"    {dow} ({occ['occurrenceDate']}): {occ['workoutName']} — {badge}")
+
+        return "\n".join(lines)
+
+    return Tool(
+        definition=ToolDefinition(
+            name="get_plan_adherence",
+            description=(
+                "Fetch detailed adherence stats for a training plan: how many sessions were completed, "
+                "missed, or are upcoming; the overall adherence percentage; and this week's day-by-day status. "
+                "Use this when the user asks how they are doing on a plan, what they missed, "
+                "or when giving adherence-based coaching feedback."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "plan_name": {
+                        "type": "string",
+                        "description": (
+                            "Name of the plan to check (e.g. 'PPL Strength Program'). "
+                            "If omitted, defaults to the first active/completed plan."
+                        ),
+                        "default": "",
                     }
                 },
                 "required": [],
