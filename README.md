@@ -122,9 +122,52 @@ ALLOW_REGISTRATION=false
 
 Then `docker compose up -d` to pick up the change.
 
-### Backup
+### Backup & Recovery
 
-Everything is stored in a single SQLite file inside a named Docker volume. To back up, copy `app.db` off the volume — that's your entire database.
+All application data is stored in Docker named volume `db_data`. **Back up these files to prevent permanent data loss:**
+
+| File | Contains | How to backup |
+|------|----------|---|
+| `app.db` | All user accounts, workouts, sessions, goals, metrics, custom exercises | Docker volume |
+| `agent_kit.db` | AI agent factual memory (injuries, equipment, learned facts) | Docker volume |
+| `.env` | Secrets and configuration (AUTH_SECRET, API keys, etc.) | Local file |
+| `qdrant_data/` | [Optional] Cross-conversation memory embeddings (if `VECTOR_BACKEND=qdrant`) | Docker volume |
+
+**Backup command (recommended: run daily):**
+
+```bash
+# Create timestamped backup directory
+mkdir -p ./backups
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+
+# Backup Docker volume (app.db, agent_kit.db, optional qdrant_data)
+docker run --rm -v db_data:/data -v "$(pwd)/backups:/backup" \
+  alpine tar czf "/backup/db_data_${TIMESTAMP}.tar.gz" -C /data .
+
+# Backup .env (contains secrets)
+cp .env "./backups/.env_${TIMESTAMP}"
+
+echo "Backup saved to: ./backups/"
+```
+
+**Restore from backup:**
+
+```bash
+# Extract volume backup
+docker compose down
+docker volume rm db_data
+docker volume create db_data
+
+docker run --rm -v db_data:/data -v "$(pwd)/backups:/backup" \
+  alpine tar xzf "/backup/db_data_TIMESTAMP.tar.gz" -C /data
+
+# Restore .env
+cp "./backups/.env_TIMESTAMP" .env
+
+docker compose up -d
+```
+
+**Note:** System exercises and database schema auto-restore from migrations on startup, so you only need to preserve the three items above.
 
 ### Changing the port
 
