@@ -29,6 +29,56 @@ Define exercises → compose workouts → schedule them into weekly plans → lo
 
 ---
 
+## UI Snapshots
+
+**Dashboard** — today's workout, active goal progress, recent PRs, adherence snapshot, and AI insights
+
+<img src="samples/dashboard.png" width="200" alt="Dashboard">
+
+**Plans** — active training schedule (left) and completed plans with adherence streaks (right)
+
+| | |
+|---|---|
+| <img src="samples/active_plan.png" width="200" alt="Active plan"> | <img src="samples/completed_plan.png" width="200" alt="Completed plan"> |
+
+**Session logging** — live logging with rest timer and set tracking (left) and completed session summary (right)
+
+| | |
+|---|---|
+| <img src="samples/live_session_log.png" width="200" alt="Live session logging"> | <img src="samples/completed_session_log.png" width="200" alt="Completed session"> |
+
+**Analytics** — exercise progression, personal records, and body metric trends
+
+| | |
+|---|---|
+| <img src="samples/stats_progression.png" width="200" alt="Progression chart"> | <img src="samples/stats_PRs.png" width="200" alt="Personal records"> |
+| <img src="samples/stats_body.png" width="200" alt="Body metrics"> | |
+
+**Goal tracking** — view all active and completed goals with automatic progress calculation
+
+<img src="samples/goals.png" width="200" alt="Goals">
+
+---
+
+## Showcase
+
+### Training balance coaching
+Ask the agent to analyze your training patterns. It queries your session history and muscle volume data, identifies imbalances, and then creates a new workout tailored to address them—all in one conversation.
+
+<img src="samples/training_balance.gif" width="300" alt="Training balance analysis and workout creation">
+
+### Goal-driven planning
+Check your progress toward a goal, discuss your availability and preferences, and let the agent create a custom training plan. Review the plan in the app UI and activate it when ready.
+
+<img src="samples/weight_goal.gif" width="300" alt="Weight goal analysis and plan creation">
+
+### Memory across sessions + Live logging
+Tell the agent about constraints (injuries, equipment, availability). In a fresh chat, ask it to log a workout. The agent remembers your constraints and proactively suggests modifications—like replacing a forbidden exercise with a safe alternative. Then hand off to the app's native logging screen to complete the session with supersets and real-time set tracking.
+
+<img src="samples/injury_start_workout_log.gif" width="300" alt="Memory retention, exercise substitution, and live session logging">
+
+---
+
 ## Installation
 
 ### 1. Configure
@@ -119,3 +169,5 @@ cd agent_service
 uv sync
 uv run uvicorn health_agent.main:app --reload --port 8000
 ```
+
+To customize the AI coach's behavior, system prompt, or available tools, edit `agent_service/config.yaml` — changes take effect on the next request (no restart needed).
