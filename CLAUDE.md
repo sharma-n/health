@@ -106,6 +106,19 @@ roadmap (§11).** This file is the quick-start; SPEC.md is the source of truth.
   (351 JS / 73 Python). Also fixed 3 pre-existing Python test failures in coaching tools — tests
   were patching `date.today` but the code calls `_local_now().date()`; fixed by patching
   `_local_now` directly and updating mock goal dates to future years.
+- **Milestone 15 (Memory & Personalization): DONE & verified** — factual memory activated: `profile_backend` +
+  `permission_backend` switched to SQLite in `config.yaml`, `extraction_enabled: true` with fitness-focused
+  extraction prompt (injuries, equipment, schedule, motivation). Memory & personalization section added to system
+  prompt — agent proactively stores durable facts via `remember_fact`; stored facts auto-injected into every turn's
+  system prompt by agent_kit (no explicit `list_facts` call needed). New `GET /v1/user-facts` endpoint on the
+  Python sidecar (auth: `X-Internal-Secret` + `X-User-Id`). New `AiInsightsCard` server component on `/dashboard`
+  (renders up to 3 stored facts; hidden when empty; graceful if sidecar unavailable). `getAiInsights(userId)` utility
+  at `src/lib/ai-insights.ts` — server-side fetch to sidecar with 60s cache, returns null on any failure.
+  Docker Compose updated: `agent_service` mounts shared `/data` volume, `SQLITE_URL` points to `/data/agent_kit.db`.
+  `.env.example` documents `SQLITE_URL`, `VECTOR_BACKEND`, `QDRANT_MODE`, `QDRANT_PATH`. 6 new Python tests; 378 JS
+  tests unchanged. Build clean.
+  **Episodic memory (cross-conversation recall) is opt-in:** set `VECTOR_BACKEND=qdrant` + run LM Studio embedding
+  server. Factual memory works out of the box without it.
 - Remaining domain sections still render `<ComingSoon milestone="…" />` placeholder.
 
 ## Stack (note the versions — several have breaking changes vs. older training data)

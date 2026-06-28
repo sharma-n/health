@@ -112,6 +112,19 @@ async def turn(
     )
 
 
+@app.get("/v1/user-facts")
+async def get_user_facts(
+    x_internal_secret: str | None = Header(default=None),
+    x_user_id: str | None = Header(default=None),
+) -> dict:
+    _check_secret(x_internal_secret)
+    if not x_user_id:
+        raise HTTPException(status_code=400, detail="X-User-Id header required")
+    assert _service is not None
+    profile = await _service.stores.profile.get(x_user_id)
+    return {"facts": profile.facts, "updated_at": profile.updated_at}
+
+
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}

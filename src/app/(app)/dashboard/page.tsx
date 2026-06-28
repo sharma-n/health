@@ -20,6 +20,8 @@ import { computeGoalProgress } from "@/lib/analytics/goals";
 import { getDashboardStats } from "@/lib/analytics/dashboard";
 import { StatCard } from "@/components/analytics/stat-card";
 import { RecentPRs } from "@/components/analytics/recent-prs";
+import { AiInsightsCard } from "@/components/analytics/AiInsightsCard";
+import { getAiInsights } from "@/lib/ai-insights";
 import { formatDateOnly, todayInTz, dayOfWeekInTz } from "@/lib/dates";
 
 export const metadata: Metadata = { title: "Home — Health" };
@@ -88,7 +90,7 @@ export default async function DashboardPage() {
   const today = new Date(todayStr + "T00:00:00Z");         // UTC midnight of user's today
   const dayOfWeek = dayOfWeekInTz(tz);                     // 0=Sun … 6=Sat in user's tz
 
-  const [todayOccurrence, stats] = await Promise.all([
+  const [todayOccurrence, stats, insights] = await Promise.all([
     userId
       ? prisma.planScheduleItem.findFirst({
           where: {
@@ -107,6 +109,7 @@ export default async function DashboardPage() {
         })
       : null,
     userId ? getDashboardStats(userId, prisma, tz) : null,
+    userId ? getAiInsights(userId) : null,
   ]);
 
   const description = stats
@@ -183,6 +186,9 @@ export default async function DashboardPage() {
       {stats && stats.recentPRs.length > 0 && (
         <RecentPRs prs={stats.recentPRs} />
       )}
+
+      {/* AI coach insights */}
+      <AiInsightsCard facts={insights} />
 
       {/* Goals + weight */}
       {userId && <DashboardGoalsAndWeight userId={userId} />}

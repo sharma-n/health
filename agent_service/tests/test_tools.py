@@ -832,3 +832,127 @@ async def test_start_session_link_contains_base_url():
         result = await tool.handler("user1", {"exercises": ["Bench Press"]})
 
     assert "http://localhost:3000/sessions/live3" in result
+
+
+# ---------------------------------------------------------------------------
+# M15 — /v1/user-facts endpoint
+# ---------------------------------------------------------------------------
+# ASGITransport doesn't trigger the FastAPI lifespan, so _service stays None.
+# We patch _service directly at the module level instead.
+
+def _make_mock_service(facts: dict) -> MagicMock:
+    mock_profile = MagicMock()
+    mock_profile.facts = facts
+    mock_profile.updated_at = 1_700_000_000.0
+    mock_svc = MagicMock()
+    mock_svc.stores.profile.get = AsyncMock(return_value=mock_profile)
+    return mock_svc
+
+
+@pytest.mark.asyncio
+async def test_user_facts_no_facts() -> None:
+    """GET /v1/user-facts returns empty facts dict when user has no stored facts."""
+    from httpx import AsyncClient, ASGITransport
+    import health_agent.main as main_module
+
+    with patch.object(main_module, "_service", _make_mock_service({})):
+        async with AsyncClient(
+            transport=ASGITransport(app=main_module.app), base_url="http://test"
+        ) as client:
+            resp = await client.get(
+                "/v1/user-facts",
+                headers={"x-internal-secret": "test-secret", "x-user-id": "user1"},
+            )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["facts"] == {}
+    assert "updated_at" in body
+
+
+@pytest.mark.asyncio
+async def test_user_facts_with_facts() -> None:
+    """GET /v1/user-facts returns stored facts for the user."""
+    from httpx import AsyncClient, ASGITransport
+    import health_agent.main as main_module
+
+    stored = {"injury_left_knee": "avoid lunges", "equipment": "home gym"}
+    with patch.object(main_module, "_service", _make_mock_service(stored)):
+        async with AsyncClient(
+            transport=ASGITransport(app=main_module.app), base_url="http://test"
+        ) as client:
+            resp = await client.get(
+                "/v1/user-facts",
+                headers={"x-internal-secret": "test-secret", "x-user-id": "user1"},
+            )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["facts"] == stored
+    assert body["updated_at"] == pytest.approx(1_700_000_000.0)
+
+
+@pytest.mark.asyncio
+async def test_user_facts_missing_secret() -> None:
+    """GET /v1/user-facts returns 401 when X-Internal-Secret is missing."""
+    from httpx import AsyncClient, ASGITransport
+    import health_agent.main as main_module
+
+    with patch.object(main_module, "_service", _make_mock_service({})):
+        async with AsyncClient(
+            transport=ASGITransport(app=main_module.app), base_url="http://test"
+        ) as client:
+            resp = await client.get(
+                "/v1/user-facts",
+                headers={"x-user-id": "user1"},
+            )
+
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_user_facts_wrong_secret() -> None:
+    """GET /v1/user-facts returns 401 when X-Internal-Secret is wrong."""
+    from httpx import AsyncClient, ASGITransport
+    import health_agent.main as main_module
+
+    with patch.object(main_module, "_service", _make_mock_service({})):
+        async with AsyncClient(
+            transport=ASGITransport(app=main_module.app), base_url="http://test"
+        ) as client:
+            resp = await client.get(
+                "/v1/user-facts",
+                headers={"x-internal-secret": "wrong-secret", "x-user-id": "user1"},
+            )
+
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_user_facts_missing_user_id() -> None:
+    """GET /v1/user-facts returns 400 when X-User-Id header is absent."""
+    from httpx import AsyncClient, ASGITransport
+    import health_agent.main as main_module
+
+    with patch.object(main_module, "_service", _make_mock_service({})):
+        async with AsyncClient(
+            transport=ASGITransport(app=main_module.app), base_url="http://test"
+        ) as client:
+            resp = await client.get(
+                "/v1/user-facts",
+                headers={"x-internal-secret": "test-secret"},
+            )
+
+    assert resp.status_code == 400
+
+
+def test_config_has_sqlite_profile_backend() -> None:
+    """config.yaml must have profile_backend: sqlite and factual extraction enabled."""
+    import yaml
+    from pathlib import Path
+
+    cfg_path = Path(__file__).parent.parent / "config.yaml"
+    cfg = yaml.safe_load(cfg_path.read_text())
+
+    assert cfg["stores"]["profile_backend"] == "sqlite"
+    assert cfg["memory"]["factual"]["extraction_enabled"] is True

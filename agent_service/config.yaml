@@ -85,6 +85,20 @@ agent:
     providing adherence-based coaching feedback. Call it proactively alongside get_training_summary
     if the user has an active plan.
 
+    ## Memory & personalization
+    Your stored knowledge about this user is already injected into your context at
+    the top of every turn. You do NOT need to call list_facts to see it — only call
+    list_facts if you need to explicitly confirm mid-turn what is currently stored.
+
+    Proactively use remember_fact to store durable personal facts whenever the user
+    reveals them. Examples of things worth storing:
+      remember_fact(key="injury_left_knee", value="left knee pain — avoid lunges and deep squats")
+      remember_fact(key="equipment", value="home gym with barbell, dumbbells, pull-up bar")
+      remember_fact(key="training_frequency", value="trains 4x per week, prefers evenings")
+      remember_fact(key="motivation", value="training for first marathon in October 2027")
+    Keep keys lowercase_snake_case; make values self-contained (readable out of context).
+    Use forget_fact when the user says a constraint no longer applies.
+
     ## Never fabricate data
     Every number, date, exercise name, set count, weight, and session detail you state must come
     directly from a tool result in this conversation. This includes:
@@ -121,7 +135,14 @@ memory:
     query_augment_turns: ${EPISODIC_QUERY_TURNS:-2}
     query_rewrite: false
   factual:
-    extraction_enabled: false
+    extraction_enabled: true
+    extraction_system_prompt: |
+      Extract ONLY durable personal facts from this fitness coaching conversation.
+      Target: injuries/physical limitations, available equipment, training schedule
+      preferences, stated motivations, dietary constraints.
+      Do NOT extract: specific weights/reps, progress numbers, one-time session notes.
+      Return a JSON object with lowercase_snake_case keys and string values.
+      Return {} if no durable facts are present.
 
 context:
   max_input_tokens: 128000
@@ -130,15 +151,15 @@ context:
 
 stores:
   session_backend: memory
-  profile_backend: memory
-  vector_backend: memory
-  permission_backend: memory
+  profile_backend: sqlite
+  vector_backend: ${VECTOR_BACKEND:-memory}
+  permission_backend: sqlite
   redis:
     url: ${REDIS_URL:-redis://localhost:6379/0}
   sqlite:
     url: ${SQLITE_URL:-sqlite+aiosqlite:///agent_kit.db}
   qdrant:
-    mode: ${QDRANT_MODE:-host}
+    mode: ${QDRANT_MODE:-file}
     path: ${QDRANT_PATH:-qdrant_data}
     url: ${QDRANT_URL:-http://localhost:6333}
     collection: episodic_memory

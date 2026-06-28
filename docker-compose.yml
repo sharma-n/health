@@ -22,6 +22,8 @@ services:
       context: ./agent_service
     ports:
       - "8000:8000"
+    volumes:
+      - db_data:/data
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -31,6 +33,10 @@ services:
       EMBED_BASE_URL: "${EMBED_BASE_URL:-http://host.docker.internal:1234}"
       EMBED_MODEL: "${EMBED_MODEL:-text-embedding-qwen3-embedding-0.6b}"
       EPISODIC_QUERY_TURNS: "${EPISODIC_QUERY_TURNS:-0}"
+      SQLITE_URL: "sqlite+aiosqlite:////data/agent_kit.db"
+      VECTOR_BACKEND: "${VECTOR_BACKEND:-memory}"
+      QDRANT_MODE: "${QDRANT_MODE:-file}"
+      QDRANT_PATH: "/data/qdrant_data"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
