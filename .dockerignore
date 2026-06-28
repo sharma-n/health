@@ -4,6 +4,7 @@ node_modules
 *.db
 .env
 .env.local
+samples/
 src/generated
 README.md
 CLAUDE.md
