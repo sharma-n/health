@@ -1,3 +1,9 @@
+health_agent:
+  models:
+    - claude-haiku-4-5-20251001
+    - claude-sonnet-4-6
+    - claude-opus-4-8
+
 agent:
   max_iterations: 12
   per_tool_timeout_s: 30.0
@@ -130,6 +136,7 @@ memory:
     ttl_s: 3600
     sweep_interval_s: 60
   episodic:
+    enabled: ${EPISODIC_ENABLED:-false}
     top_k: 3
     min_score: 0.3
     query_augment_turns: ${EPISODIC_QUERY_TURNS:-2}
@@ -174,7 +181,6 @@ tools:
     - remember_fact
     - forget_fact
     - list_facts
-    - recall
     - get_workout_history
     - get_exercises
     - get_workouts

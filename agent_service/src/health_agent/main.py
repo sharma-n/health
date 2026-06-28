@@ -23,14 +23,15 @@ from health_agent.service import build_service
 from health_agent.context import user_timezone
 
 _service: AgentService | None = None
+_models: list[str] = []
 _INTERNAL_SECRET = os.environ.get("INTERNAL_API_SECRET", "")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    global _service
+    global _service, _models
     logger.info("INTERNAL_API_SECRET configured: %s", bool(_INTERNAL_SECRET))
-    _service = build_service()
+    _service, _models = build_service()
     await _service.astart()
     yield
     await _service.aclose()
@@ -42,6 +43,11 @@ app = FastAPI(title="Health Agent", lifespan=lifespan)
 class TurnRequest(BaseModel):
     message: str
     conversation_id: str
+
+
+class SetModelRequest(BaseModel):
+    conversation_id: str
+    model: str | None = None
 
 
 def _check_secret(secret: str | None) -> None:
@@ -101,8 +107,6 @@ async def turn(
     if not x_user_id:
         raise HTTPException(status_code=400, detail="X-User-Id header required")
 
-    # Store timezone in context variable so service.py and tools can read it
-    # without needing it threaded through every function signature.
     user_timezone.set(x_user_timezone or "UTC")
 
     return StreamingResponse(
@@ -110,6 +114,31 @@ async def turn(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.get("/v1/models")
+async def get_models(
+    x_internal_secret: str | None = Header(default=None),
+    x_user_id: str | None = Header(default=None),
+) -> dict:
+    _check_secret(x_internal_secret)
+    if not x_user_id:
+        raise HTTPException(status_code=400, detail="X-User-Id header required")
+    return {"models": _models}
+
+
+@app.put("/v1/model")
+async def set_model(
+    request: SetModelRequest,
+    x_internal_secret: str | None = Header(default=None),
+    x_user_id: str | None = Header(default=None),
+) -> dict:
+    _check_secret(x_internal_secret)
+    if not x_user_id:
+        raise HTTPException(status_code=400, detail="X-User-Id header required")
+    assert _service is not None
+    await _service.set_conversation_model(request.conversation_id, x_user_id, request.model)
+    return {"conversation_id": request.conversation_id, "model": request.model}
 
 
 @app.get("/v1/user-facts")

@@ -13,8 +13,18 @@ type SseEvent =
   | { type: "turn_complete"; iterations: number; stop_reason: string }
   | { type: "unknown" };
 
-function storageKey(kind: "messages" | "convId", userId: string) {
+function storageKey(kind: "messages" | "convId" | "model", userId: string) {
   return `chat_${kind}_${userId}`;
+}
+
+const MODEL_LABELS: Record<string, string> = {
+  "claude-haiku-4-5-20251001": "Haiku 4.5",
+  "claude-sonnet-4-6": "Sonnet 4.6",
+  "claude-opus-4-8": "Opus 4.8",
+};
+
+function modelLabel(id: string): string {
+  return MODEL_LABELS[id] ?? id;
 }
 
 export function ChatWindow({ userId }: { userId: string }) {
@@ -22,7 +32,27 @@ export function ChatWindow({ userId }: { userId: string }) {
   const [conversationId, setConversationId] = useState(`health-${userId}`);
   const [isStreaming, setIsStreaming] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>("");
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Fetch available models once on mount
+  useEffect(() => {
+    fetch("/api/agent")
+      .then((r) => r.json())
+      .then((data: { models?: string[] }) => {
+        const models = data.models ?? [];
+        setAvailableModels(models);
+        // Restore persisted model choice or fall back to first
+        try {
+          const saved = localStorage.getItem(storageKey("model", userId));
+          setSelectedModel(saved && models.includes(saved) ? saved : (models[0] ?? ""));
+        } catch {
+          setSelectedModel(models[0] ?? "");
+        }
+      })
+      .catch(() => {});
+  }, [userId]);
 
   // Hydrate from localStorage after mount (avoids SSR mismatch)
   useEffect(() => {
@@ -57,7 +87,21 @@ export function ChatWindow({ userId }: { userId: string }) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  function startNewChat() {
+  async function switchModel(model: string) {
+    setSelectedModel(model);
+    try {
+      localStorage.setItem(storageKey("model", userId), model);
+    } catch {}
+    // Notify sidecar so the next turn in the current conversation uses this model.
+    // Fire-and-forget; a failure here is non-critical (the agent falls back to default).
+    await fetch("/api/agent/model", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conversationId, model }),
+    }).catch(() => {});
+  }
+
+  async function startNewChat() {
     const newId = `health-${userId}-${Date.now()}`;
     setConversationId(newId);
     setMessages([]);
@@ -65,6 +109,14 @@ export function ChatWindow({ userId }: { userId: string }) {
       localStorage.setItem(storageKey("convId", userId), newId);
       localStorage.removeItem(storageKey("messages", userId));
     } catch {}
+    // If a non-default model is selected, apply it to the new conversation immediately.
+    if (selectedModel && selectedModel !== availableModels[0]) {
+      await fetch("/api/agent/model", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: newId, model: selectedModel }),
+      }).catch(() => {});
+    }
   }
 
   async function sendMessage(text: string) {
@@ -166,7 +218,24 @@ export function ChatWindow({ userId }: { userId: string }) {
 
   return (
     <div className="flex h-[calc(100dvh-10rem)] flex-col">
-      <div className="flex items-center justify-end px-1 pb-2">
+      <div className="flex items-center justify-between px-1 pb-2">
+        {availableModels.length > 1 ? (
+          <select
+            value={selectedModel}
+            onChange={(e) => switchModel(e.target.value)}
+            disabled={isStreaming}
+            className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-medium text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Select model"
+          >
+            {availableModels.map((m) => (
+              <option key={m} value={m}>
+                {modelLabel(m)}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div />
+        )}
         <button
           onClick={startNewChat}
           disabled={isStreaming}

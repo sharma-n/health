@@ -7,6 +7,31 @@ const bodySchema = z.object({
   conversationId: z.string().optional(),
 });
 
+export async function GET(): Promise<Response> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const agentUrl = process.env.AGENT_SERVICE_URL;
+  if (!agentUrl) {
+    return Response.json({ models: [] });
+  }
+
+  try {
+    const upstream = await fetch(`${agentUrl}/v1/models`, {
+      headers: {
+        "X-Internal-Secret": process.env.INTERNAL_API_SECRET ?? "",
+        "X-User-Id": session.user.id,
+      },
+    });
+    if (!upstream.ok) return Response.json({ models: [] });
+    return Response.json(await upstream.json());
+  } catch {
+    return Response.json({ models: [] });
+  }
+}
+
 export async function POST(req: Request): Promise<Response> {
   const session = await auth();
   if (!session?.user?.id) {
