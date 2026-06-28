@@ -92,8 +92,23 @@ async def test_system_prompt_fn_returns_date_string() -> None:
 async def test_get_workouts_happy_path():
     tool = _read_tool("get_workouts")
     workouts = [
-        {"id": "w1", "name": "Push Day", "description": "Chest and triceps", "exerciseCount": 4},
-        {"id": "w2", "name": "Pull Day", "description": None, "exerciseCount": 3},
+        {
+            "id": "w1",
+            "name": "Push Day",
+            "description": "Chest and triceps",
+            "exercises": [
+                {"exerciseId": "e1", "name": "Bench Press", "targetSets": 4, "targetReps": 8, "targetWeightKg": 80.0, "restSeconds": 90, "supersetGroup": None, "notes": None, "order": 0},
+                {"exerciseId": "e2", "name": "Overhead Press", "targetSets": 3, "targetReps": 10, "targetWeightKg": None, "restSeconds": None, "supersetGroup": None, "notes": None, "order": 1},
+            ],
+        },
+        {
+            "id": "w2",
+            "name": "Pull Day",
+            "description": None,
+            "exercises": [
+                {"exerciseId": "e3", "name": "Pull-up", "targetSets": 3, "targetReps": None, "targetWeightKg": None, "restSeconds": 60, "supersetGroup": None, "notes": None, "order": 0},
+            ],
+        },
     ]
     with patch("health_agent.tools.read_tools.http_client") as mock_client:
         mock_client.get = AsyncMock(return_value=_resp(workouts))
@@ -101,9 +116,15 @@ async def test_get_workouts_happy_path():
 
     assert "Push Day" in result
     assert "w1" in result
-    assert "4 exercises" in result
+    assert "2 exercises" in result
+    assert "Bench Press" in result
+    assert "e1" in result
+    assert "4 sets" in result
+    assert "8 reps" in result
+    assert "80.0kg" in result
     assert "Pull Day" in result
-    assert "3 exercises" in result
+    assert "1 exercises" in result
+    assert "Pull-up" in result
 
 
 @pytest.mark.asyncio

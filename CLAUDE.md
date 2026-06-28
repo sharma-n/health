@@ -75,8 +75,10 @@ roadmap (§11).** This file is the quick-start; SPEC.md is the source of truth.
   sessions with progressive overload across 2 weeks. Idempotent — safe to re-run at any time.
   Requires system exercises to be seeded first (`npm run db:seed`).
 - **Pre-M13 gap fix: DONE** — `get_workouts` Python tool added to `read_tools.py` (wraps existing
-  `GET /api/internal/workouts`). Needed to list workout templates and resolve names → IDs for plan
-  scheduling. 3 new tests; `config.yaml` + system prompt updated. 299 JS tests passing.
+  `GET /api/internal/workouts`). Returns full workout details including exercise names, IDs, sets,
+  reps, weight, rest, and superset grouping for each exercise. Used to list workout templates,
+  resolve names → IDs for plan scheduling, and let the agent describe workout contents. 3 new tests;
+  `config.yaml` + system prompt updated. 388 JS tests passing.
 - **Milestone 13 (Write Tools): DONE & verified** — 4 internal POST routes (`workouts`, `plans`,
   `goals`, `metrics`) using existing Zod schemas, rate-limited per userId (30/5min), userId-scoped,
   with cross-user workoutId guard on plan creation. 4 Python write tools in `write_tools.py`:

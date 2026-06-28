@@ -203,7 +203,7 @@ describe("GET /api/internal/workouts", () => {
     await db.$disconnect();
   });
 
-  it("returns workouts with exerciseCount", async () => {
+  it("returns workouts with exercise details", async () => {
     const res = await getWorkouts(
       makeReq("http://localhost/api/internal/workouts", {
         "x-internal-secret": SECRET,
@@ -213,7 +213,7 @@ describe("GET /api/internal/workouts", () => {
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data).toHaveLength(1);
-    expect(data[0]).toMatchObject({ name: "Push Day", exerciseCount: 0 });
+    expect(data[0]).toMatchObject({ name: "Push Day", exercises: [] });
   });
 });
 

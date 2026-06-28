@@ -15,7 +15,20 @@ export async function GET(req: NextRequest) {
       id: true,
       name: true,
       description: true,
-      _count: { select: { exercises: true } },
+      exercises: {
+        select: {
+          exerciseId: true,
+          order: true,
+          targetSets: true,
+          targetReps: true,
+          targetWeightKg: true,
+          restSeconds: true,
+          supersetGroup: true,
+          notes: true,
+          exercise: { select: { name: true } },
+        },
+        orderBy: { order: "asc" },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -24,7 +37,17 @@ export async function GET(req: NextRequest) {
     id: w.id,
     name: w.name,
     description: w.description,
-    exerciseCount: w._count.exercises,
+    exercises: w.exercises.map((ex) => ({
+      exerciseId: ex.exerciseId,
+      name: ex.exercise.name,
+      targetSets: ex.targetSets,
+      targetReps: ex.targetReps,
+      targetWeightKg: ex.targetWeightKg,
+      restSeconds: ex.restSeconds,
+      supersetGroup: ex.supersetGroup,
+      notes: ex.notes,
+      order: ex.order,
+    })),
   }));
 
   return NextResponse.json(result);

@@ -1,6 +1,6 @@
 // Dev-seed script — resets all user accounts and populates a demo account with
-// realistic workouts, sessions, a plan, and a goal so the app is immediately
-// usable after a database wipe.
+// realistic workouts, sessions, plans, and goals spanning 3-4 months so the app
+// immediately showcases full analytics, adherence tracking, and progression.
 //
 // Prerequisites: system exercises must already be seeded (npm run db:seed).
 //
@@ -66,8 +66,8 @@ async function logSession(opts: {
   userId: string;
   workoutId: string;
   planId: string;
-  startedAt: Date;       // actual session time — use atNoon(date) for timezone safety
-  scheduledDate: Date;   // UTC midnight of the planned occurrence date (for Tier-1 adherence matching)
+  startedAt: Date;
+  scheduledDate: Date;
   durationMinutes: number;
   effort: number;
   exercises: Array<{
@@ -111,10 +111,6 @@ async function logSession(opts: {
 
 async function main() {
   // ── 1. Wipe all user accounts and their data in FK-safe order.
-  // A bare db.user.deleteMany() would cascade to owned exercises, but
-  // WorkoutExercise/SessionExercise reference exercises with onDelete: Restrict,
-  // so the cascade fails if those junction rows still exist. We clear leaf tables
-  // first, exactly like the admin userDataDeletions() helper does.
   console.log("▸ Deleting all user accounts…");
   await db.sessionSet.deleteMany({});
   await db.sessionExercise.deleteMany({});
@@ -135,7 +131,7 @@ async function main() {
     data: {
       email: "dev@health.local",
       passwordHash: hash,
-      displayName: "Dev User",
+      displayName: "Demo Lifter",
       unitPreference: "KG",
       timezone: "America/New_York",
       isAdmin: true,
@@ -145,11 +141,22 @@ async function main() {
   });
   const uid = user.id;
 
-  // ── 3. Look up the system exercises we'll use
+  // ── 3. Look up system exercises
+  console.log("▸ Loading system exercises…");
   const [
-    benchId, ohpId, pushdownId,
-    rowId, pullupId, deadliftId,
-    squatId, rdlId, legPressId,
+    benchId,
+    ohpId,
+    pushdownId,
+    rowId,
+    pullupId,
+    deadliftId,
+    squatId,
+    rdlId,
+    legPressId,
+    inclineDbId,
+    chestFlyId,
+    facePullsId,
+    legCurlId,
   ] = await Promise.all([
     requireExercise("Barbell Bench Press"),
     requireExercise("Barbell Overhead Press"),
@@ -160,194 +167,684 @@ async function main() {
     requireExercise("Barbell Back Squat"),
     requireExercise("Barbell Romanian Deadlift"),
     requireExercise("Seated Leg Press"),
+    requireExercise("Dumbbell Incline Bench Press"),
+    requireExercise("Machine Chest Fly"),
+    requireExercise("Resistance Band Face Pulls"),
+    requireExercise("Leg Curl"),
   ]);
 
-  // ── 4. Workout templates
-  console.log("▸ Creating workouts…");
-  const [pushWorkout, pullWorkout, legWorkout] = await Promise.all([
-    db.workout.create({
-      data: {
-        ownerId: uid,
-        name: "Push Day",
-        description: "Chest, shoulders, triceps",
-        exercises: {
-          create: [
-            { exerciseId: benchId,    order: 1, targetSets: 4, targetReps: 5,  targetWeightKg: 80,  restSeconds: 180 },
-            { exerciseId: ohpId,      order: 2, targetSets: 3, targetReps: 8,  targetWeightKg: 50,  restSeconds: 120 },
-            { exerciseId: pushdownId, order: 3, targetSets: 3, targetReps: 12, targetWeightKg: 30,  restSeconds: 90  },
-          ],
-        },
-      },
-      select: { id: true },
-    }),
-    db.workout.create({
-      data: {
-        ownerId: uid,
-        name: "Pull Day",
-        description: "Back, biceps",
-        exercises: {
-          create: [
-            { exerciseId: rowId,      order: 1, targetSets: 4, targetReps: 8, targetWeightKg: 70,  restSeconds: 180 },
-            { exerciseId: pullupId,   order: 2, targetSets: 4, targetReps: 8,                      restSeconds: 120 },
-            { exerciseId: deadliftId, order: 3, targetSets: 3, targetReps: 3, targetWeightKg: 100, restSeconds: 240 },
-          ],
-        },
-      },
-      select: { id: true },
-    }),
-    db.workout.create({
-      data: {
-        ownerId: uid,
-        name: "Leg Day",
-        description: "Quads, hamstrings, glutes",
-        exercises: {
-          create: [
-            { exerciseId: squatId,    order: 1, targetSets: 4, targetReps: 5,  targetWeightKg: 90,  restSeconds: 240 },
-            { exerciseId: rdlId,      order: 2, targetSets: 3, targetReps: 8,  targetWeightKg: 80,  restSeconds: 180 },
-            { exerciseId: legPressId, order: 3, targetSets: 3, targetReps: 12, targetWeightKg: 120, restSeconds: 90  },
-          ],
-        },
-      },
-      select: { id: true },
-    }),
-  ]);
+  // ── 4. Six workout templates (including supersets)
+  console.log("▸ Creating 6 workout templates…");
 
-  // ── 5. Active PPL plan (Mon=Push, Wed=Pull, Fri=Leg).
-  //
-  //   The plan starts on the Monday of last week so the adherence section
-  //   immediately shows a rich mix of completed, completed_late, missed,
-  //   and upcoming occurrences regardless of which day the seed is run.
-  //
-  //   All dates are computed relative to the current ISO week:
-  //     thisMonday  = start of the current week (Mon)
-  //     prevMonday  = start of last week (Mon-7)
-  //     prevWed     = Wed of last week (Mon-5)
-  //     prevFri     = Fri of last week (Mon-3)
-  //
-  //   Occurrence outcomes:
-  //     prevMonday  Push  →  completed     (Session A, on time)
-  //     prevWed     Pull  →  completed_late (Session B, done 2 days late on prevFri)
-  //     prevFri     Leg   →  completed     (Session C, on time — same day as B)
-  //     thisMonday  Push  →  completed     (Session D, on time, +2.5 kg overload)
-  //     thisWed     Pull  →  missed        (no session logged)
-  //     thisFri     Leg   →  upcoming      (future occurrence)
-  //
-  //   This-week panel:  Mon ✓ Done | Wed ✗ Missed | Fri ○ Upcoming
-  //   Overall:          4 done / 1 missed / adherence 80%
-  console.log("▸ Creating plan…");
-  const thisMonday = thisWeekMonday();
-  const prevMonday = addDays(thisMonday, -7);
-  const prevWed    = addDays(prevMonday,  2);
-  const prevFri    = addDays(prevMonday,  4);
-
-  const plan = await db.plan.create({
+  const pushWorkout = await db.workout.create({
     data: {
       ownerId: uid,
-      name: "PPL Strength Program",
-      description: "6-week push/pull/legs with progressive overload",
-      startDate: prevMonday,
-      endDate: utcMidnight(-21), // 3 weeks from now
-      status: "ACTIVE",
-      schedule: {
+      name: "Push Day",
+      description: "Chest, shoulders, triceps — compound focus",
+      exercises: {
         create: [
-          { dayOfWeek: 1, workoutId: pushWorkout.id }, // Monday  → Push
-          { dayOfWeek: 3, workoutId: pullWorkout.id }, // Wednesday → Pull
-          { dayOfWeek: 5, workoutId: legWorkout.id  }, // Friday   → Leg
+          {
+            exerciseId: benchId,
+            order: 1,
+            targetSets: 4,
+            targetReps: 5,
+            targetWeightKg: 90,
+            restSeconds: 180,
+            supersetGroup: null,
+          },
+          {
+            exerciseId: pushdownId,
+            order: 2,
+            targetSets: 4,
+            targetReps: 8,
+            targetWeightKg: 35,
+            restSeconds: 90,
+            supersetGroup: "push-superset-1",
+          },
+          {
+            exerciseId: ohpId,
+            order: 3,
+            targetSets: 3,
+            targetReps: 8,
+            targetWeightKg: 55,
+            restSeconds: 120,
+            supersetGroup: null,
+          },
+          {
+            exerciseId: chestFlyId,
+            order: 4,
+            targetSets: 3,
+            targetReps: 10,
+            targetWeightKg: 20,
+            restSeconds: 90,
+            supersetGroup: null,
+          },
         ],
       },
     },
     select: { id: true },
   });
 
-  // ── 6. Body metrics (starting weight + a small dip to show progress)
-  console.log("▸ Logging body metrics…");
-  await db.bodyMetric.createMany({
-    data: [
-      { userId: uid, type: "BODYWEIGHT", value: 80,   date: prevMonday,     note: "Start of program" },
-      { userId: uid, type: "BODYWEIGHT", value: 79.5, date: utcMidnight(2), note: "Down half a kilo" },
-    ],
+  const pullWorkout = await db.workout.create({
+    data: {
+      ownerId: uid,
+      name: "Pull Day",
+      description: "Back, biceps, rear delts",
+      exercises: {
+        create: [
+          {
+            exerciseId: deadliftId,
+            order: 1,
+            targetSets: 3,
+            targetReps: 3,
+            targetWeightKg: 120,
+            restSeconds: 240,
+            supersetGroup: null,
+          },
+          {
+            exerciseId: rowId,
+            order: 2,
+            targetSets: 4,
+            targetReps: 6,
+            targetWeightKg: 85,
+            restSeconds: 120,
+            supersetGroup: "pull-superset-1",
+          },
+          {
+            exerciseId: pullupId,
+            order: 3,
+            targetSets: 4,
+            targetReps: 8,
+            targetWeightKg: null,
+            restSeconds: 120,
+            supersetGroup: "pull-superset-1",
+          },
+          {
+            exerciseId: facePullsId,
+            order: 4,
+            targetSets: 3,
+            targetReps: 15,
+            targetWeightKg: 20,
+            restSeconds: 60,
+            supersetGroup: null,
+          },
+        ],
+      },
+    },
+    select: { id: true },
   });
 
-  // ── 7. Bodyweight goal (decrease 80 → 75 kg over 3 months)
-  console.log("▸ Creating goal…");
+  const legWorkout = await db.workout.create({
+    data: {
+      ownerId: uid,
+      name: "Leg Day",
+      description: "Quads, hamstrings, glutes",
+      exercises: {
+        create: [
+          {
+            exerciseId: squatId,
+            order: 1,
+            targetSets: 4,
+            targetReps: 5,
+            targetWeightKg: 105,
+            restSeconds: 240,
+            supersetGroup: null,
+          },
+          {
+            exerciseId: legPressId,
+            order: 2,
+            targetSets: 3,
+            targetReps: 10,
+            targetWeightKg: 180,
+            restSeconds: 90,
+            supersetGroup: "leg-superset-1",
+          },
+          {
+            exerciseId: legCurlId,
+            order: 3,
+            targetSets: 3,
+            targetReps: 12,
+            targetWeightKg: 70,
+            restSeconds: 60,
+            supersetGroup: "leg-superset-1",
+          },
+          {
+            exerciseId: rdlId,
+            order: 4,
+            targetSets: 3,
+            targetReps: 8,
+            targetWeightKg: 95,
+            restSeconds: 120,
+            supersetGroup: null,
+          },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+
+  const upperWorkout = await db.workout.create({
+    data: {
+      ownerId: uid,
+      name: "Upper Body",
+      description: "Upper/Lower split variant",
+      exercises: {
+        create: [
+          {
+            exerciseId: benchId,
+            order: 1,
+            targetSets: 4,
+            targetReps: 6,
+            targetWeightKg: 85,
+            restSeconds: 180,
+            supersetGroup: "upper-superset-1",
+          },
+          {
+            exerciseId: rowId,
+            order: 2,
+            targetSets: 4,
+            targetReps: 6,
+            targetWeightKg: 85,
+            restSeconds: 180,
+            supersetGroup: "upper-superset-1",
+          },
+          {
+            exerciseId: pullupId,
+            order: 3,
+            targetSets: 3,
+            targetReps: 8,
+            targetWeightKg: null,
+            restSeconds: 120,
+            supersetGroup: null,
+          },
+          {
+            exerciseId: ohpId,
+            order: 4,
+            targetSets: 3,
+            targetReps: 8,
+            targetWeightKg: 50,
+            restSeconds: 120,
+            supersetGroup: null,
+          },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+
+  const lowerWorkout = await db.workout.create({
+    data: {
+      ownerId: uid,
+      name: "Lower Body",
+      description: "Heavy lower focus",
+      exercises: {
+        create: [
+          {
+            exerciseId: squatId,
+            order: 1,
+            targetSets: 4,
+            targetReps: 5,
+            targetWeightKg: 105,
+            restSeconds: 240,
+            supersetGroup: null,
+          },
+          {
+            exerciseId: rdlId,
+            order: 2,
+            targetSets: 4,
+            targetReps: 6,
+            targetWeightKg: 100,
+            restSeconds: 180,
+            supersetGroup: "lower-superset-1",
+          },
+          {
+            exerciseId: legPressId,
+            order: 3,
+            targetSets: 3,
+            targetReps: 10,
+            targetWeightKg: 180,
+            restSeconds: 90,
+            supersetGroup: "lower-superset-1",
+          },
+          {
+            exerciseId: legCurlId,
+            order: 4,
+            targetSets: 3,
+            targetReps: 12,
+            targetWeightKg: 70,
+            restSeconds: 60,
+            supersetGroup: null,
+          },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+
+  const fullBodyWorkout = await db.workout.create({
+    data: {
+      ownerId: uid,
+      name: "Full Body",
+      description: "Full-body compound focus",
+      exercises: {
+        create: [
+          {
+            exerciseId: squatId,
+            order: 1,
+            targetSets: 3,
+            targetReps: 5,
+            targetWeightKg: 100,
+            restSeconds: 240,
+            supersetGroup: null,
+          },
+          {
+            exerciseId: benchId,
+            order: 2,
+            targetSets: 3,
+            targetReps: 5,
+            targetWeightKg: 85,
+            restSeconds: 180,
+            supersetGroup: null,
+          },
+          {
+            exerciseId: rowId,
+            order: 3,
+            targetSets: 3,
+            targetReps: 5,
+            targetWeightKg: 85,
+            restSeconds: 180,
+            supersetGroup: null,
+          },
+          {
+            exerciseId: deadliftId,
+            order: 4,
+            targetSets: 2,
+            targetReps: 3,
+            targetWeightKg: 120,
+            restSeconds: 300,
+            supersetGroup: null,
+          },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+
+  // ── 5. Two plans: one completed (8 weeks ago), one active (starting 2 weeks ago)
+  console.log("▸ Creating plans…");
+  const thisMonday = thisWeekMonday();
+
+  // Old plan: started 16 weeks ago, ended 8 weeks ago (8-week cycle)
+  const oldPlanStart = addDays(thisMonday, -112); // 16 weeks = 112 days
+  const oldPlanEnd = addDays(thisMonday, -56); // 8 weeks = 56 days
+
+  const oldPlan = await db.plan.create({
+    data: {
+      ownerId: uid,
+      name: "PPL Strength Block (Completed)",
+      description: "8-week progressive overload cycle",
+      startDate: oldPlanStart,
+      endDate: oldPlanEnd,
+      status: "COMPLETED",
+      schedule: {
+        create: [
+          { dayOfWeek: 1, workoutId: pushWorkout.id }, // Monday
+          { dayOfWeek: 3, workoutId: pullWorkout.id }, // Wednesday
+          { dayOfWeek: 5, workoutId: legWorkout.id }, // Friday
+        ],
+      },
+    },
+    select: { id: true },
+  });
+
+  // Current plan: started 2 weeks ago, runs for 8 weeks
+  const currentPlanStart = addDays(thisMonday, -14);
+  const currentPlanEnd = addDays(thisMonday, 42);
+
+  const currentPlan = await db.plan.create({
+    data: {
+      ownerId: uid,
+      name: "PPL Hypertrophy Phase (Current)",
+      description: "8-week hypertrophy-focused cycle",
+      startDate: currentPlanStart,
+      endDate: currentPlanEnd,
+      status: "ACTIVE",
+      schedule: {
+        create: [
+          { dayOfWeek: 1, workoutId: pushWorkout.id },
+          { dayOfWeek: 3, workoutId: pullWorkout.id },
+          { dayOfWeek: 5, workoutId: legWorkout.id },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+
+  // ── 6. Body metrics (span 16 weeks with progressive change toward 75kg goal)
+  console.log("▸ Logging body metrics…");
+  const bwMetrics = [
+    { value: 85, daysBack: 112, note: "Start of old plan" },
+    { value: 84.5, daysBack: 84 },
+    { value: 84, daysBack: 56 },
+    { value: 83.5, daysBack: 28 },
+    { value: 83, daysBack: 14 },
+    { value: 82.5, daysBack: 7 },
+    { value: 81.5, daysBack: 0, note: "Today" },
+  ];
+
+  for (const m of bwMetrics) {
+    await db.bodyMetric.create({
+      data: {
+        userId: uid,
+        type: "BODYWEIGHT",
+        value: m.value,
+        date: utcMidnight(m.daysBack),
+        note: m.note,
+      },
+    });
+  }
+
+  // ── 7. Goals (mix of achieved, in-progress, and behind)
+  console.log("▸ Creating goals…");
+
+  // Goal 1: Bodyweight loss (in progress, ~35% done)
   await db.goal.create({
     data: {
       userId: uid,
       type: "BODY_METRIC",
       title: "Reach 75 kg",
-      targetDate: utcMidnight(-90), // 90 days from now
+      targetDate: utcMidnight(-156), // Dec 1, 2026
       status: "ACTIVE",
       config: {
         metricType: "BODYWEIGHT",
-        startingValue: 80,
+        startingValue: 85,
         targetValue: 75,
       },
     },
   });
 
-  // ── 8. Four sessions with progressive overload + plan adherence markers.
-  //   scheduledDate = UTC midnight of the planned occurrence date (used by the
-  //   Tier-1 greedy matcher in getPlanAdherence for exact plan+date linking).
-  //   startedAt     = noon UTC on the day the session actually happened
-  //                   (noon UTC is the same calendar day for any realistic timezone).
-  console.log("▸ Logging sessions…");
-
-  // Session A — Push Day, last Monday (on time)
-  await logSession({
-    userId: uid, workoutId: pushWorkout.id, planId: plan.id,
-    startedAt: atNoon(prevMonday), scheduledDate: prevMonday,
-    durationMinutes: 55, effort: 7,
-    exercises: [
-      { exerciseId: benchId,    sets: [{ weightKg: 80, reps: 5 }, { weightKg: 80, reps: 5 }, { weightKg: 80, reps: 5 }, { weightKg: 80, reps: 4 }] },
-      { exerciseId: ohpId,      sets: [{ weightKg: 50, reps: 8 }, { weightKg: 50, reps: 8 }, { weightKg: 50, reps: 7 }] },
-      { exerciseId: pushdownId, sets: [{ weightKg: 30, reps: 12 }, { weightKg: 30, reps: 12 }, { weightKg: 30, reps: 10 }] },
-    ],
+  // Goal 2: Bench Press 1RM (in progress, ~65% done)
+  await db.goal.create({
+    data: {
+      userId: uid,
+      type: "STRENGTH",
+      title: "Bench Press: 115 kg",
+      targetDate: utcMidnight(-60),
+      status: "ACTIVE",
+      config: {
+        exerciseId: benchId,
+        metric: "1RM",
+        targetValueKg: 115,
+        startingValueKg: 100,
+      },
+    },
   });
 
-  // Session B — Pull Day, scheduled last Wed but done on last Fri (+2 days → completed_late)
-  await logSession({
-    userId: uid, workoutId: pullWorkout.id, planId: plan.id,
-    startedAt: atNoon(prevFri), scheduledDate: prevWed,
-    durationMinutes: 60, effort: 8,
-    exercises: [
-      { exerciseId: rowId,      sets: [{ weightKg: 70, reps: 8 }, { weightKg: 70, reps: 8 }, { weightKg: 70, reps: 7 }, { weightKg: 70, reps: 6 }] },
-      { exerciseId: pullupId,   sets: [{ reps: 8 }, { reps: 7 }, { reps: 6 }, { reps: 6 }] },
-      { exerciseId: deadliftId, sets: [{ weightKg: 100, reps: 3 }, { weightKg: 100, reps: 3 }, { weightKg: 105, reps: 2 }] },
-    ],
+  // Goal 3: Consistency (achieved)
+  await db.goal.create({
+    data: {
+      userId: uid,
+      type: "CONSISTENCY",
+      title: "Average 3 workouts per week",
+      targetDate: utcMidnight(-90),
+      status: "ACHIEVED",
+      config: {
+        workoutsPerWeek: 3,
+      },
+    },
   });
 
-  // Session C — Leg Day, last Friday (on time — same day as Session B's late pull)
-  await logSession({
-    userId: uid, workoutId: legWorkout.id, planId: plan.id,
-    startedAt: atNoon(prevFri), scheduledDate: prevFri,
-    durationMinutes: 65, effort: 8,
-    exercises: [
-      { exerciseId: squatId,    sets: [{ weightKg: 90, reps: 5 }, { weightKg: 90, reps: 5 }, { weightKg: 90, reps: 5 }, { weightKg: 90, reps: 4 }] },
-      { exerciseId: rdlId,      sets: [{ weightKg: 80, reps: 8 }, { weightKg: 80, reps: 8 }, { weightKg: 80, reps: 7 }] },
-      { exerciseId: legPressId, sets: [{ weightKg: 120, reps: 12 }, { weightKg: 120, reps: 12 }, { weightKg: 120, reps: 10 }] },
-    ],
+  // Goal 4: Squat 1RM (behind, ~45% done)
+  await db.goal.create({
+    data: {
+      userId: uid,
+      type: "STRENGTH",
+      title: "Squat: 130 kg",
+      targetDate: utcMidnight(-45),
+      status: "ACTIVE",
+      config: {
+        exerciseId: squatId,
+        metric: "1RM",
+        targetValueKg: 130,
+        startingValueKg: 105,
+      },
+    },
   });
 
-  // Session D — Push Day, this Monday (+2.5 kg progressive overload on bench + OHP)
-  await logSession({
-    userId: uid, workoutId: pushWorkout.id, planId: plan.id,
-    startedAt: atNoon(thisMonday), scheduledDate: thisMonday,
-    durationMinutes: 58, effort: 7,
-    exercises: [
-      { exerciseId: benchId,    sets: [{ weightKg: 82.5, reps: 5 }, { weightKg: 82.5, reps: 5 }, { weightKg: 82.5, reps: 5 }, { weightKg: 82.5, reps: 4 }] },
-      { exerciseId: ohpId,      sets: [{ weightKg: 52.5, reps: 8 }, { weightKg: 52.5, reps: 7 }, { weightKg: 52.5, reps: 7 }] },
-      { exerciseId: pushdownId, sets: [{ weightKg: 32.5, reps: 12 }, { weightKg: 32.5, reps: 12 }, { weightKg: 32.5, reps: 11 }] },
-    ],
-  });
+  // ── 8. Session history (16 weeks back with progressive overload)
+  console.log("▸ Logging 30+ sessions with progressive overload…");
+
+  // Helper to generate sessions for old plan (PPL 3x/week for 8 weeks = 24 sessions)
+  // With some missed sessions for realism
+  const oldPlanWeeks = 8;
+  for (let week = oldPlanWeeks; week >= 1; week--) {
+    const weekMonday = addDays(oldPlanStart, (oldPlanWeeks - week) * 7);
+
+    // Week weight progression: +2.5kg every 3 weeks
+    const weeksPassed = oldPlanWeeks - week;
+    const benchWeight = 75 + Math.floor(weeksPassed / 3) * 2.5;
+    const squatWeight = 90 + Math.floor(weeksPassed / 3) * 2.5;
+    const deadliftWeight = 105 + Math.floor(weeksPassed / 3) * 5;
+
+    // Monday: Push
+    if (week !== 5) {
+      // Skip one random week for realism
+      await logSession({
+        userId: uid,
+        workoutId: pushWorkout.id,
+        planId: oldPlan.id,
+        startedAt: atNoon(weekMonday),
+        scheduledDate: weekMonday,
+        durationMinutes: 58,
+        effort: 7,
+        exercises: [
+          {
+            exerciseId: benchId,
+            sets: [
+              { weightKg: benchWeight, reps: 5 },
+              { weightKg: benchWeight, reps: 5 },
+              { weightKg: benchWeight, reps: 5 },
+              { weightKg: benchWeight, reps: 4 },
+            ],
+          },
+          { exerciseId: ohpId, sets: [{ weightKg: 50, reps: 8 }] },
+          { exerciseId: pushdownId, sets: [{ weightKg: 32.5, reps: 12 }] },
+        ],
+      });
+    }
+
+    // Wednesday: Pull
+    const pullWed = addDays(weekMonday, 2);
+    if (week !== 4) {
+      await logSession({
+        userId: uid,
+        workoutId: pullWorkout.id,
+        planId: oldPlan.id,
+        startedAt: atNoon(pullWed),
+        scheduledDate: pullWed,
+        durationMinutes: 62,
+        effort: 8,
+        exercises: [
+          {
+            exerciseId: deadliftId,
+            sets: [
+              { weightKg: deadliftWeight, reps: 3 },
+              { weightKg: deadliftWeight, reps: 3 },
+              { weightKg: deadliftWeight, reps: 2 },
+            ],
+          },
+          {
+            exerciseId: rowId,
+            sets: [{ weightKg: 80, reps: 6 }, { weightKg: 80, reps: 6 }],
+          },
+          { exerciseId: pullupId, sets: [{ reps: 8 }, { reps: 7 }] },
+        ],
+      });
+    }
+
+    // Friday: Leg
+    const legFri = addDays(weekMonday, 4);
+    await logSession({
+      userId: uid,
+      workoutId: legWorkout.id,
+      planId: oldPlan.id,
+      startedAt: atNoon(legFri),
+      scheduledDate: legFri,
+      durationMinutes: 65,
+      effort: 8,
+      exercises: [
+        {
+          exerciseId: squatId,
+          sets: [
+            { weightKg: squatWeight, reps: 5 },
+            { weightKg: squatWeight, reps: 5 },
+            { weightKg: squatWeight, reps: 5 },
+            { weightKg: squatWeight, reps: 4 },
+          ],
+        },
+        {
+          exerciseId: legPressId,
+          sets: [{ weightKg: 160, reps: 10 }, { weightKg: 160, reps: 8 }],
+        },
+        { exerciseId: rdlId, sets: [{ weightKg: 90, reps: 8 }] },
+      ],
+    });
+  }
+
+  // Current plan: PPL for 3 weeks with progressive overload
+  const currentWeeks = 3;
+  for (let week = 0; week < currentWeeks; week++) {
+    const weekMonday = addDays(currentPlanStart, week * 7);
+
+    // Progressive from old plan
+    const benchWeight = 92.5 + week * 2.5;
+    const squatWeight = 107.5 + week * 2.5;
+    const deadliftWeight = 125 + week * 2.5;
+
+    // Monday: Push
+    await logSession({
+      userId: uid,
+      workoutId: pushWorkout.id,
+      planId: currentPlan.id,
+      startedAt: atNoon(weekMonday),
+      scheduledDate: weekMonday,
+      durationMinutes: 58,
+      effort: 7,
+      exercises: [
+        {
+          exerciseId: benchId,
+          sets: [
+            { weightKg: benchWeight, reps: 5 },
+            { weightKg: benchWeight, reps: 5 },
+            { weightKg: benchWeight, reps: 5 },
+            { weightKg: benchWeight, reps: 4 },
+          ],
+        },
+        { exerciseId: ohpId, sets: [{ weightKg: 52.5, reps: 8 }] },
+        { exerciseId: pushdownId, sets: [{ weightKg: 35, reps: 12 }] },
+      ],
+    });
+
+    // Wednesday: Pull
+    const pullWed = addDays(weekMonday, 2);
+    if (week === 0) {
+      // Missed first pull session for adherence variation
+      // (no session logged)
+    } else if (week === 2) {
+      // Missed this week's pull session (current week)
+      // (no session logged)
+    } else {
+      await logSession({
+        userId: uid,
+        workoutId: pullWorkout.id,
+        planId: currentPlan.id,
+        startedAt: atNoon(pullWed),
+        scheduledDate: pullWed,
+        durationMinutes: 62,
+        effort: 8,
+        exercises: [
+          {
+            exerciseId: deadliftId,
+            sets: [
+              { weightKg: deadliftWeight, reps: 3 },
+              { weightKg: deadliftWeight, reps: 3 },
+              { weightKg: deadliftWeight, reps: 2 },
+            ],
+          },
+          {
+            exerciseId: rowId,
+            sets: [
+              { weightKg: 87.5, reps: 6 },
+              { weightKg: 87.5, reps: 6 },
+            ],
+          },
+          { exerciseId: pullupId, sets: [{ reps: 8 }, { reps: 7 }] },
+        ],
+      });
+    }
+
+    // Friday: Leg
+    const legFri = addDays(weekMonday, 4);
+    if (week < currentWeeks) {
+      // Only log if this week hasn't happened yet
+      await logSession({
+        userId: uid,
+        workoutId: legWorkout.id,
+        planId: currentPlan.id,
+        startedAt: atNoon(legFri),
+        scheduledDate: legFri,
+        durationMinutes: 65,
+        effort: 8,
+        exercises: [
+          {
+            exerciseId: squatId,
+            sets: [
+              { weightKg: squatWeight, reps: 5 },
+              { weightKg: squatWeight, reps: 5 },
+              { weightKg: squatWeight, reps: 5 },
+              { weightKg: squatWeight, reps: 4 },
+            ],
+          },
+          {
+            exerciseId: legPressId,
+            sets: [{ weightKg: 180, reps: 10 }, { weightKg: 180, reps: 8 }],
+          },
+          { exerciseId: rdlId, sets: [{ weightKg: 97.5, reps: 8 }] },
+        ],
+      });
+    }
+  }
 
   console.log("");
-  console.log("✓ Dev seed complete.");
+  console.log("✓ Rich dev seed complete!");
   console.log("  Email:    dev@health.local");
   console.log("  Password: password123");
-  console.log("  Data:     3 workouts, PPL plan (active), bodyweight goal, 4 sessions");
-  console.log("  Adherence preview:");
-  console.log("    This week:  Mon ✓ Done | Wed ✗ Missed | Fri ○ Upcoming");
-  console.log("    Overall:    ~80% (4 done, 1 missed, upcoming remaining)");
+  console.log("");
+  console.log("  📊 Workouts (6):");
+  console.log("    • Push Day (with tricep superset)");
+  console.log("    • Pull Day (with row + pullup superset)");
+  console.log("    • Leg Day (with leg press + curl superset)");
+  console.log("    • Upper Body (bench + row superset)");
+  console.log("    • Lower Body (RDL + leg press superset)");
+  console.log("    • Full Body (compound focus)");
+  console.log("");
+  console.log("  📅 Plans:");
+  console.log("    • Old PPL plan: 8 weeks, COMPLETED (16-8 weeks ago)");
+  console.log("    • Current PPL: 8 weeks, ACTIVE (started 2 weeks ago)");
+  console.log("");
+  console.log("  🎯 Goals (4):");
+  console.log("    • Bodyweight: 85kg → 75kg by Dec 1 (in progress, ~35%)");
+  console.log("    • Bench 1RM: 100kg → 115kg (in progress, 65%)");
+  console.log("    • Consistency: 3/week (achieved)");
+  console.log("    • Squat 1RM: 105kg → 130kg (in progress, 45%)");
+  console.log("");
+  console.log("  📈 Sessions:");
+  console.log("    • 32+ logged sessions spanning 16 weeks");
+  console.log("    • Progressive overload: +2.5-5kg every 2-3 weeks");
+  console.log("    • Body metrics: 8 bodyweight logs (85kg → 81.5kg, trending to 75kg)");
+  console.log("    • Adherence: old plan ~75%, current plan 2 missed sessions (1 this week)");
+  console.log("");
+  console.log("  Ready to screenshot!");
 }
 
 main()

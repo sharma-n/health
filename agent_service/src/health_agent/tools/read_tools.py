@@ -157,15 +157,27 @@ def _workouts_tool() -> Tool:
         lines = ["Saved workout templates:"]
         for w in data:
             desc = f" — {w['description']}" if w.get("description") else ""
-            lines.append(
-                f"  - {w['name']} (id: {w['id']}, {w['exerciseCount']} exercises){desc}"
-            )
+            exercises = w.get("exercises", [])
+            lines.append(f"  - {w['name']} (id: {w['id']}, {len(exercises)} exercises){desc}")
+            for ex in exercises:
+                parts = []
+                if ex.get("targetSets"):
+                    parts.append(f"{ex['targetSets']} sets")
+                if ex.get("targetReps"):
+                    parts.append(f"{ex['targetReps']} reps")
+                if ex.get("targetWeightKg") is not None:
+                    parts.append(f"{ex['targetWeightKg']}kg")
+                if ex.get("restSeconds"):
+                    parts.append(f"{ex['restSeconds']}s rest")
+                target = f" ({', '.join(parts)})" if parts else ""
+                superset = f" [superset: {ex['supersetGroup']}]" if ex.get("supersetGroup") else ""
+                lines.append(f"      • {ex['name']} (exercise_id: {ex['exerciseId']}){target}{superset}")
         return "\n".join(lines)
 
     return Tool(
         definition=ToolDefinition(
             name="get_workouts",
-            description="List all saved workout templates (name, id, exercise count). Use this before scheduling workouts in a plan or when the user asks what workouts they have.",
+            description="List all saved workout templates with full exercise details (names, ids, sets, reps, weight, rest). Use this before scheduling workouts in a plan or when the user asks what workouts they have.",
             parameters={"type": "object", "properties": {}, "required": []},
         ),
         handler=handler,
