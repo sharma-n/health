@@ -37,6 +37,7 @@ const internalExerciseSchema = z.object({
   targetReps: z.number().int().positive().nullable().optional(),
   targetWeightKg: z.number().nonnegative().nullable().optional(),
   restSeconds: z.number().int().nonnegative().nullable().optional(),
+  supersetGroup: z.string().trim().max(50).nullable().optional(),
   notes: z.string().trim().max(1000).nullable().optional(),
 });
 
@@ -89,6 +90,7 @@ export async function POST(req: NextRequest) {
               targetReps: ex.targetReps ?? null,
               targetWeightKg: ex.targetWeightKg ?? null,
               restSeconds: ex.restSeconds ?? null,
+              supersetGroup: ex.supersetGroup ?? null,
               notes: ex.notes ?? null,
             })),
           },

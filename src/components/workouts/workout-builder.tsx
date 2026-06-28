@@ -24,6 +24,7 @@ import type { WorkoutFormState } from "@/lib/actions/workouts";
 import type { WorkoutExerciseInput } from "@/lib/validation/workout";
 import { ExercisePicker } from "./exercise-picker";
 import { WorkoutExerciseRow } from "./workout-exercise-row";
+import { SupersetGroupHeader } from "./superset-group-header";
 
 type AvailableExercise = {
   id: string;
@@ -68,6 +69,28 @@ function ActionFeedback({ state }: { state: WorkoutFormState }) {
   return null;
 }
 
+// Returns the next unused superset group letter (A, B, C…)
+function getNextGroupName(exercises: BuilderExercise[]): string {
+  const existing = new Set(exercises.map((ex) => ex.supersetGroup).filter(Boolean));
+  for (const ch of "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
+    if (!existing.has(ch)) return ch;
+  }
+  return "A";
+}
+
+// Returns distinct superset groups in first-occurrence order
+function getOrderedGroups(exercises: BuilderExercise[]): string[] {
+  const seen = new Set<string>();
+  const groups: string[] = [];
+  for (const ex of exercises) {
+    if (ex.supersetGroup && !seen.has(ex.supersetGroup)) {
+      seen.add(ex.supersetGroup);
+      groups.push(ex.supersetGroup);
+    }
+  }
+  return groups;
+}
+
 export function WorkoutBuilder({
   action,
   availableExercises,
@@ -83,7 +106,6 @@ export function WorkoutBuilder({
 
   const weightUnit = weightUnitLabel(unitPreference);
 
-  // Initialize exercises
   const initialExercises: BuilderExercise[] = defaultValues?.exercises.map(
     (ex, idx) => ({
       key: `ex-${idx}-${ex.exerciseId}`,
@@ -126,8 +148,7 @@ export function WorkoutBuilder({
       const oldIndex = exercises.findIndex((ex) => ex.key === active.id);
       const newIndex = exercises.findIndex((ex) => ex.key === over.id);
       if (oldIndex !== -1 && newIndex !== -1) {
-        const newExercises = arrayMove(exercises, oldIndex, newIndex);
-        setExercises(newExercises);
+        setExercises(arrayMove(exercises, oldIndex, newIndex));
       }
     }
   };
@@ -158,7 +179,6 @@ export function WorkoutBuilder({
       exercises.map((ex) => {
         if (ex.key !== key) return ex;
 
-        // Convert string input values to proper types
         const converted: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(updates)) {
           if (k === "targetSets" && v !== "") {
@@ -176,7 +196,6 @@ export function WorkoutBuilder({
 
         const updated = { ...ex, ...converted } as BuilderExercise;
 
-        // Convert targetWeightDisplay to kg if weight is being updated
         if (converted.targetWeightDisplay !== undefined) {
           updated.targetWeightKg = (converted.targetWeightDisplay as string)
             ? toKg(parseFloat(converted.targetWeightDisplay as string), unitPreference)
@@ -192,13 +211,44 @@ export function WorkoutBuilder({
     setExercises(exercises.filter((ex) => ex.key !== key));
   };
 
+  // Assign an exercise to a superset group; copies the group's existing restSeconds
+  const handleGroupExercise = (key: string, groupName: string) => {
+    setExercises((prev) => {
+      const groupRest = prev.find((ex) => ex.supersetGroup === groupName)?.restSeconds ?? null;
+      return prev.map((ex) =>
+        ex.key === key ? { ...ex, supersetGroup: groupName, restSeconds: groupRest } : ex
+      );
+    });
+  };
+
+  // Remove a single exercise from its superset group
+  const handleUngroupExercise = (key: string) => {
+    setExercises((prev) =>
+      prev.map((ex) => (ex.key === key ? { ...ex, supersetGroup: null, restSeconds: null } : ex))
+    );
+  };
+
+  // Clear supersetGroup from all exercises in the named group
+  const handleDisbandGroup = (groupName: string) => {
+    setExercises((prev) =>
+      prev.map((ex) =>
+        ex.supersetGroup === groupName ? { ...ex, supersetGroup: null, restSeconds: null } : ex
+      )
+    );
+  };
+
+  // Sync restSeconds to every exercise in the superset group
+  const handleUpdateSupersetRest = (groupName: string, restSeconds: number | null) => {
+    setExercises((prev) =>
+      prev.map((ex) => (ex.supersetGroup === groupName ? { ...ex, restSeconds } : ex))
+    );
+  };
+
   const handleSubmit = async (formData: FormData) => {
-    // Add custom fields to formData
     formData.set("name", name);
     formData.set("description", description);
     formData.set("notes", notes);
 
-    // Serialize exercises to JSON (with order preserved from current state)
     const exercisesData: WorkoutExerciseInput[] = exercises.map((ex, idx) => ({
       exerciseId: ex.exerciseId,
       order: idx,
@@ -219,6 +269,7 @@ export function WorkoutBuilder({
   };
 
   const exerciseKeys = exercises.map((ex) => ex.key);
+  const seenGroups = new Set<string>();
 
   return (
     <form action={handleSubmit} className="max-w-2xl mx-auto space-y-5">
@@ -268,28 +319,57 @@ export function WorkoutBuilder({
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
           >
-            <SortableContext
-              items={exerciseKeys}
-              strategy={verticalListSortingStrategy}
-            >
+            <SortableContext items={exerciseKeys} strategy={verticalListSortingStrategy}>
               <ul className="space-y-2">
-                {exercises.map((exercise) => (
-                  <li key={exercise.key}>
-                    <WorkoutExerciseRow
-                      id={exercise.key}
-                      name={exercise.exerciseName}
-                      targetSets={exercise.targetSets?.toString() ?? ""}
-                      targetReps={exercise.targetReps?.toString() ?? ""}
-                      targetWeightDisplay={exercise.targetWeightDisplay}
-                      restSeconds={exercise.restSeconds?.toString() ?? ""}
-                      supersetGroup={exercise.supersetGroup ?? ""}
-                      notes={exercise.notes ?? ""}
-                      weightUnit={weightUnit}
-                      onUpdate={(updates) => handleUpdateExercise(exercise.key, updates as Record<string, unknown>)}
-                      onRemove={() => handleRemoveExercise(exercise.key)}
-                    />
-                  </li>
-                ))}
+                {exercises.map((exercise) => {
+                  const isFirstInGroup =
+                    exercise.supersetGroup && !seenGroups.has(exercise.supersetGroup);
+                  if (exercise.supersetGroup) seenGroups.add(exercise.supersetGroup);
+
+                  // Groups available to join (all existing groups except this exercise's own)
+                  const availableGroups = getOrderedGroups(exercises).filter(
+                    (g) => g !== exercise.supersetGroup
+                  );
+
+                  return (
+                    <li key={exercise.key} className="space-y-0">
+                      {isFirstInGroup && exercise.supersetGroup && (
+                        <SupersetGroupHeader
+                          groupName={exercise.supersetGroup}
+                          restSeconds={exercise.restSeconds ?? null}
+                          onRestChange={(val) =>
+                            handleUpdateSupersetRest(exercise.supersetGroup!, val)
+                          }
+                          onDisband={() => handleDisbandGroup(exercise.supersetGroup!)}
+                        />
+                      )}
+                      <WorkoutExerciseRow
+                        id={exercise.key}
+                        name={exercise.exerciseName}
+                        targetSets={exercise.targetSets?.toString() ?? ""}
+                        targetReps={exercise.targetReps?.toString() ?? ""}
+                        targetWeightDisplay={exercise.targetWeightDisplay}
+                        restSeconds={exercise.restSeconds?.toString() ?? ""}
+                        supersetGroup={exercise.supersetGroup ?? ""}
+                        notes={exercise.notes ?? ""}
+                        weightUnit={weightUnit}
+                        availableGroups={availableGroups}
+                        onUpdate={(updates) =>
+                          handleUpdateExercise(exercise.key, updates as Record<string, unknown>)
+                        }
+                        onRemove={() => handleRemoveExercise(exercise.key)}
+                        onGroup={(action, groupName) => {
+                          const targetGroup =
+                            action === "new"
+                              ? getNextGroupName(exercises)
+                              : (groupName ?? getNextGroupName(exercises));
+                          handleGroupExercise(exercise.key, targetGroup);
+                        }}
+                        onUngroup={() => handleUngroupExercise(exercise.key)}
+                      />
+                    </li>
+                  );
+                })}
               </ul>
             </SortableContext>
           </DndContext>

@@ -124,14 +124,17 @@ def _create_workout_tool() -> Tool:
             if ex_id is None:
                 unresolved.append(ex_name)
             else:
-                resolved.append({
+                entry: dict[str, Any] = {
                     "exerciseId": ex_id,
                     "targetSets": ex.get("target_sets"),
                     "targetReps": ex.get("target_reps"),
                     "targetWeightKg": ex.get("target_weight_kg"),
                     "restSeconds": ex.get("rest_seconds"),
                     "notes": ex.get("notes"),
-                })
+                }
+                if ex.get("superset_group"):
+                    entry["supersetGroup"] = str(ex["superset_group"]).strip()
+                resolved.append(entry)
 
         if unresolved:
             return f"error: could not find exercises: {', '.join(unresolved)}. Use get_exercises to search."
@@ -156,7 +159,9 @@ def _create_workout_tool() -> Tool:
             description=(
                 "Create a new saved workout template with a list of exercises. "
                 "Each exercise entry should include exercise_name (required), and optionally "
-                "target_sets, target_reps, target_weight_kg (in kg), rest_seconds, notes. "
+                "target_sets, target_reps, target_weight_kg (in kg), rest_seconds, notes, "
+                "and superset_group (a short label like 'A' or 'B' — exercises sharing the same "
+                "label are grouped as a superset in the UI). "
                 "Always describe the workout and ask for confirmation before calling this tool."
             ),
             parameters={
@@ -183,6 +188,14 @@ def _create_workout_tool() -> Tool:
                                 "target_weight_kg": {"type": "number", "description": "Target weight in kg."},
                                 "rest_seconds": {"type": "integer", "description": "Rest between sets in seconds."},
                                 "notes": {"type": "string", "description": "Exercise-specific coaching notes."},
+                                "superset_group": {
+                                    "type": "string",
+                                    "description": (
+                                        "Optional superset label (e.g. 'A', 'B'). "
+                                        "Exercises with the same label are displayed as a superset. "
+                                        "Leave unset for standalone exercises."
+                                    ),
+                                },
                             },
                             "required": ["exercise_name"],
                         },

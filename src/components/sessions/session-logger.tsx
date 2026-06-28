@@ -12,6 +12,7 @@ import type { UnitPreference } from "@/lib/constants";
 import { ExercisePicker } from "@/components/workouts/exercise-picker";
 import { RestTimer } from "@/components/sessions/rest-timer";
 import { SessionCompleteForm } from "@/components/sessions/session-complete-form";
+import { getSupersetColor } from "@/lib/superset-color";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -50,6 +51,7 @@ type TemplateTarget = {
   targetWeightKg: number | null;
   restSeconds: number | null;
   notes: string | null;
+  supersetGroup: string | null;
 };
 
 type SetSlot = {
@@ -66,12 +68,14 @@ type ExerciseState = {
   exerciseId: string;
   name: string;
   slots: SetSlot[];
+  supersetGroup: string | null;
 };
 
 type RestTimerState = {
   active: boolean;
   totalSeconds: number;
   completedSetId: string | null;
+  nextExerciseIdx: number | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -121,7 +125,6 @@ function buildSlots(
         saving: false,
       });
     } else {
-      // Template row — not yet persisted
       slots.push({
         id: null,
         setNumber: i + 1,
@@ -149,7 +152,38 @@ function initExerciseState(
     exerciseId: ex.exerciseId,
     name: ex.exercise.name,
     slots: buildSlots(ex.sets, targetMap.get(ex.exerciseId), unit),
+    supersetGroup: targetMap.get(ex.exerciseId)?.supersetGroup ?? null,
   }));
+}
+
+// Returns indices of all exercises sharing the same supersetGroup as exercises[currentIdx].
+// Returns null if the current exercise has no group.
+export function getSupersetIndices(
+  exercises: ExerciseState[],
+  currentIdx: number,
+): number[] | null {
+  const group = exercises[currentIdx]?.supersetGroup;
+  if (!group) return null;
+  return exercises.map((_, i) => i).filter((i) => exercises[i].supersetGroup === group);
+}
+
+// Among the superset indices, find the next exercise (after currentIdx, wrapping around)
+// that has fewer completed sets than completedCount. Returns null if all are caught up.
+export function getNextInSuperset(
+  supersetIndices: number[],
+  exercises: ExerciseState[],
+  completedCount: number,
+  currentIdx: number,
+): number | null {
+  // Search starting from exercises after currentIdx, then wrap to those before
+  const after = supersetIndices.filter((i) => i > currentIdx);
+  const before = supersetIndices.filter((i) => i < currentIdx);
+  for (const idx of [...after, ...before]) {
+    if (exercises[idx].slots.filter((s) => s.completed).length < completedCount) {
+      return idx;
+    }
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -180,6 +214,7 @@ export function SessionLogger({
     active: false,
     totalSeconds: 0,
     completedSetId: null,
+    nextExerciseIdx: null,
   });
   const [pickerOpen, setPickerOpen] = useState(false);
   const [showComplete, setShowComplete] = useState(false);
@@ -203,6 +238,18 @@ export function SessionLogger({
   const addedExerciseIds = new Set(exercises.map((e) => e.exerciseId));
   const unitLabel = weightUnitLabel(unitPreference);
 
+  // Superset "Next" preview — what would auto-advance to after marking the next set done
+  const supersetIndices = current ? getSupersetIndices(exercises, currentIdx) : null;
+  const completedAfterMark = current
+    ? current.slots.filter((s) => s.completed).length + 1
+    : 0;
+  const nextSupersetIdx =
+    supersetIndices !== null
+      ? getNextInSuperset(supersetIndices, exercises, completedAfterMark, currentIdx)
+      : null;
+  const nextInSupersetName =
+    nextSupersetIdx !== null ? exercises[nextSupersetIdx].name : null;
+
   // ---- Slot mutation helpers ----
 
   function updateSlot(seIdx: number, slotIdx: number, patch: Partial<SetSlot>) {
@@ -220,7 +267,6 @@ export function SessionLogger({
     );
   }
 
-  // Mark a slot as saving optimistically, call upsertSetAction, update state.
   async function handleDoneSet(seIdx: number, slotIdx: number) {
     const ex = exercises[seIdx];
     const slot = ex.slots[slotIdx];
@@ -231,7 +277,6 @@ export function SessionLogger({
     const weightKg = slot.weightInput && !isNaN(weightVal) ? toKg(weightVal, unitPreference) : null;
     const reps = slot.repsInput && !isNaN(repsVal) ? repsVal : null;
 
-    // Optimistic update
     updateSlot(seIdx, slotIdx, { saving: true });
 
     const result = await upsertSetAction({
@@ -254,10 +299,68 @@ export function SessionLogger({
       completed: true,
     });
 
-    // Start rest timer if template specifies rest
     const target = targetMap.get(ex.exerciseId);
-    if (target?.restSeconds && target.restSeconds > 0) {
-      setRestTimer({ active: true, totalSeconds: target.restSeconds, completedSetId: result.setId });
+    const willHaveCompleted = ex.slots.filter((s) => s.completed).length + 1;
+
+    if (ex.supersetGroup) {
+      const indices = getSupersetIndices(exercises, seIdx);
+      const nextInRound =
+        indices !== null
+          ? getNextInSuperset(indices, exercises, willHaveCompleted, seIdx)
+          : null;
+
+      if (nextInRound !== null) {
+        // More exercises need a set this round — auto-advance, no rest
+        setCurrentIdx(nextInRound);
+      } else {
+        // Full round complete — check if every exercise in the group has finished all its slots
+        const supersetFullyDone =
+          indices !== null &&
+          indices.every((idx) => {
+            const exAtIdx = exercises[idx];
+            const done =
+              idx === seIdx
+                ? willHaveCompleted
+                : exAtIdx.slots.filter((s) => s.completed).length;
+            return done >= exAtIdx.slots.length;
+          });
+
+        let nextTarget: number | null;
+        if (supersetFullyDone) {
+          // Advance past the superset entirely
+          const maxIdx = indices ? Math.max(...indices) : seIdx;
+          nextTarget = maxIdx + 1 < exercises.length ? maxIdx + 1 : null;
+        } else {
+          // More rounds to do — return to first exercise in the group
+          nextTarget = indices ? indices[0] : null;
+        }
+
+        if (target?.restSeconds && target.restSeconds > 0) {
+          setRestTimer({
+            active: true,
+            totalSeconds: target.restSeconds,
+            completedSetId: result.setId,
+            nextExerciseIdx: nextTarget,
+          });
+        } else if (nextTarget !== null) {
+          setCurrentIdx(nextTarget);
+        }
+      }
+    } else {
+      // Non-superset: auto-advance to next exercise when all current slots are done
+      const allDone = willHaveCompleted >= ex.slots.length;
+      const nextExIdx = allDone && seIdx < exercises.length - 1 ? seIdx + 1 : null;
+
+      if (target?.restSeconds && target.restSeconds > 0) {
+        setRestTimer({
+          active: true,
+          totalSeconds: target.restSeconds,
+          completedSetId: result.setId,
+          nextExerciseIdx: nextExIdx,
+        });
+      } else if (nextExIdx !== null) {
+        setCurrentIdx(nextExIdx);
+      }
     }
   }
 
@@ -290,19 +393,23 @@ export function SessionLogger({
   const handleRestComplete = useCallback(
     async (actualSeconds: number) => {
       const setId = restTimer.completedSetId;
-      setRestTimer({ active: false, totalSeconds: 0, completedSetId: null });
+      const advanceTo = restTimer.nextExerciseIdx;
+      setRestTimer({ active: false, totalSeconds: 0, completedSetId: null, nextExerciseIdx: null });
       if (setId) await setRestAction(setId, actualSeconds);
+      if (advanceTo !== null) setCurrentIdx(advanceTo);
     },
-    [restTimer.completedSetId],
+    [restTimer.completedSetId, restTimer.nextExerciseIdx],
   );
 
   const handleRestSkip = useCallback(
     async (actualSeconds: number) => {
       const setId = restTimer.completedSetId;
-      setRestTimer({ active: false, totalSeconds: 0, completedSetId: null });
+      const advanceTo = restTimer.nextExerciseIdx;
+      setRestTimer({ active: false, totalSeconds: 0, completedSetId: null, nextExerciseIdx: null });
       if (setId) await setRestAction(setId, actualSeconds);
+      if (advanceTo !== null) setCurrentIdx(advanceTo);
     },
-    [restTimer.completedSetId],
+    [restTimer.completedSetId, restTimer.nextExerciseIdx],
   );
 
   // ---- Add exercise ----
@@ -316,6 +423,7 @@ export function SessionLogger({
       seId: result.sessionExerciseId,
       exerciseId: exercise.id,
       name: exercise.name,
+      supersetGroup: null,
       slots: [
         {
           id: null,
@@ -337,6 +445,10 @@ export function SessionLogger({
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
+
+  const supersetColor = current?.supersetGroup
+    ? getSupersetColor(current.supersetGroup)
+    : null;
 
   return (
     <div className="space-y-4 pb-24">
@@ -363,7 +475,9 @@ export function SessionLogger({
       ) : (
         <>
           {/* Exercise navigation */}
-          <div className="flex items-center gap-2">
+          <div
+            className={`flex items-center gap-2 rounded-[var(--radius-app)] border-l-4 border border-border bg-surface px-3 py-3 ${supersetColor ? supersetColor.border : "border-l-transparent"} ${supersetColor ? supersetColor.bg : ""}`}
+          >
             <button
               type="button"
               onClick={() => setCurrentIdx((i) => Math.max(0, i - 1))}
@@ -377,6 +491,14 @@ export function SessionLogger({
                 {currentIdx + 1} / {exercises.length}
               </p>
               <p className="font-semibold text-foreground">{current?.name}</p>
+              {current?.supersetGroup && (
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  <span className="font-medium">Superset {current.supersetGroup}</span>
+                  {nextInSupersetName && (
+                    <span className="text-muted-foreground/70"> · Next: {nextInSupersetName}</span>
+                  )}
+                </p>
+              )}
             </div>
             <button
               type="button"
@@ -398,7 +520,10 @@ export function SessionLogger({
                   currentTarget.targetReps && `× ${currentTarget.targetReps} reps`,
                   currentTarget.targetWeightKg != null &&
                     `@ ${round2(fromKg(currentTarget.targetWeightKg, unitPreference))} ${unitLabel}`,
-                  currentTarget.restSeconds && `${currentTarget.restSeconds}s rest`,
+                  currentTarget.restSeconds &&
+                    (current?.supersetGroup
+                      ? `${currentTarget.restSeconds}s rest between rounds`
+                      : `${currentTarget.restSeconds}s rest`),
                 ]
                   .filter(Boolean)
                   .join(" ")}

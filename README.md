@@ -11,18 +11,20 @@ Define exercises → compose workouts → schedule them into weekly plans → lo
 ### Core app
 - **Exercise library** — 90 seeded system exercises (filterable by muscle group & equipment); create and manage custom exercises with instructions and coaching notes
 - **Workout builder** — ordered exercise lists with per-exercise targets (sets, reps, weight, rest); drag-to-reorder; superset grouping
-- **Plans / routines** — weekly schedule (Mon–Sun → workout) over a date range; DRAFT → ACTIVE → COMPLETED lifecycle; "Today's Workout" on the dashboard
+- **Plans / routines** — weekly schedule (Mon–Sun → workout) over a date range; DRAFT → ACTIVE → COMPLETED lifecycle; "Today's Workout" on the dashboard; plan adherence tracking with multi-week streaks
 - **Live session logging** — one-exercise-at-a-time logger; rest timer; per-set weight × reps; overall effort (RPE 1–10) on completion
 - **Goals** — Strength (estimated 1RM via Epley formula), Body Metric (bodyweight/measurements), and Consistency (workouts/week) goal types with automatic progress tracking
 - **Body metrics** — log bodyweight, waist, arms, and other measurements over time with trend charts
-- **Analytics** — exercise progression, personal records, plan adherence / streaks, volume by muscle group, body metric trends; muscle-group heatmap overlaid on an SVG body diagram
-- **Dashboard** — today's scheduled workout, current weight, active goal progress bars, recent PRs, adherence snapshot
+- **Analytics** — exercise progression, personal records, plan adherence / streaks with heatmap, volume by muscle group, body metric trends; muscle-group heatmap overlaid on an SVG body diagram
+- **Dashboard** — today's scheduled workout, current weight, active goal progress bars, recent PRs, adherence snapshot, AI-generated personalized insights
 
 ### AI Coach (chatbot)
-- Conversational AI coach accessible from the **Chat** tab — works with any OpenAI-compatible endpoint: cloud providers (Anthropic, OpenAI, Gemini) or fully local models (LM Studio, Ollama, etc.)
+- Conversational AI coach accessible from the **Chat** tab — works with any OpenAI-compatible endpoint: cloud providers (Anthropic, OpenAI, Gemini) or fully local models (LM Studio, Ollama, etc.); supports multi-model selection per turn
+- **Memory & personalization** — agent remembers durable facts about your fitness journey (injuries, equipment, schedule, goals) and proactively references them in future conversations
 - **Read tools** — agent queries your real training data to answer questions ("What muscles am I neglecting?", "Show me squat progress", "What's my longest streak?")
 - **Coaching tools** — synthesises multiple data sources to give proactive advice: training balance analysis, goal trajectory projection, next-workout recommendation, 4-week training summary
-- **Write tools** — agent creates workouts, training plans, goals, and logs body metrics on your behalf after explicit confirmation ("Create a PPL split starting next Monday for 8 weeks")
+- **Ad-hoc session logging** — agent can log past sessions (atomic: all exercises at once) or start new sessions (live: hand off to native app UI for real-time logging)
+- **Write tools** — agent creates workouts, training plans, goals, logs body metrics, and logs past/live workout sessions on your behalf after explicit confirmation ("Create a PPL split starting next Monday for 8 weeks" or "Log yesterday's gym session: 3×5 squats at 100kg, then 3×8 leg press")
 - **Exercise creation** — agent can create custom exercises when explicitly asked
 
 ---
