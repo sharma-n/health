@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { ExerciseActions } from "@/components/exercises/exercise-actions";
 import type { Equipment, MuscleGroup } from "@/lib/constants";
+import { MUSCLE_LABELS } from "@/lib/constants";
 import { BodyMap } from "@/components/ui/body-map";
 
 const EQUIPMENT_LABELS: Record<Equipment, string> = {
@@ -19,24 +20,6 @@ const EQUIPMENT_LABELS: Record<Equipment, string> = {
   OTHER: "Other",
 };
 
-const MUSCLE_LABELS: Record<MuscleGroup, string> = {
-  CHEST: "Chest",
-  BACK: "Back",
-  SHOULDERS: "Shoulders",
-  BICEPS: "Biceps",
-  TRICEPS: "Triceps",
-  FOREARMS: "Forearms",
-  QUADS: "Quads",
-  HAMSTRINGS: "Hamstrings",
-  GLUTES: "Glutes",
-  CALVES: "Calves",
-  ABS: "Abs",
-  OBLIQUES: "Obliques",
-  TRAPS: "Traps",
-  LATS: "Lats",
-  NECK: "Neck",
-  FULL_BODY: "Full Body",
-};
 
 function parseMuscles(raw: unknown): MuscleGroup[] {
   if (Array.isArray(raw)) return raw as MuscleGroup[];

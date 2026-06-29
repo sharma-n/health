@@ -31,6 +31,7 @@ type AvailableExercise = {
   name: string;
   equipment: string;
   primaryMuscles: unknown;
+  secondaryMuscles: unknown;
   isSystem: boolean;
 };
 

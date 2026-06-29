@@ -9,26 +9,8 @@ import { PageHeader } from "@/components/app-shell/page-header";
 import { WorkoutDeleteForm } from "@/components/workouts/workout-delete-form";
 import { startSessionAction } from "@/lib/actions/session";
 import type { MuscleGroup } from "@/lib/constants";
+import { MUSCLE_LABELS } from "@/lib/constants";
 import { BodyMap } from "@/components/ui/body-map";
-
-const MUSCLE_LABELS: Record<MuscleGroup, string> = {
-  CHEST: "Chest",
-  BACK: "Back",
-  SHOULDERS: "Shoulders",
-  BICEPS: "Biceps",
-  TRICEPS: "Triceps",
-  FOREARMS: "Forearms",
-  QUADS: "Quads",
-  HAMSTRINGS: "Hamstrings",
-  GLUTES: "Glutes",
-  CALVES: "Calves",
-  ABS: "Abs",
-  OBLIQUES: "Obliques",
-  TRAPS: "Traps",
-  LATS: "Lats",
-  NECK: "Neck",
-  FULL_BODY: "Full Body",
-};
 
 function parseMuscles(raw: unknown): MuscleGroup[] {
   if (Array.isArray(raw)) return raw as MuscleGroup[];

@@ -20,8 +20,10 @@ interface VolumeChartProps {
 // Fixed palette — each muscle group gets a consistent colour
 const MUSCLE_COLORS: Record<string, string> = {
   CHEST: "#3b82f6",
-  BACK: "#10b981",
-  SHOULDERS: "#8b5cf6",
+  UPPER_BACK: "#10b981",
+  LOWER_BACK: "#059669",
+  FRONT_DELTS: "#8b5cf6",
+  REAR_DELTS: "#7c3aed",
   BICEPS: "#f59e0b",
   TRICEPS: "#ef4444",
   FOREARMS: "#f97316",
@@ -34,7 +36,9 @@ const MUSCLE_COLORS: Record<string, string> = {
   TRAPS: "#fbbf24",
   LATS: "#22d3ee",
   NECK: "#94a3b8",
-  FULL_BODY: "#64748b",
+  ADDUCTORS: "#f43f5e",
+  ABDUCTORS: "#d946ef",
+  CARDIO: "#64748b",
 };
 
 function getColor(muscle: string, idx: number): string {
