@@ -12,6 +12,7 @@ const ANTERIOR_MUSCLES = new Set<Muscle>([
   "abs",
   "obliques",
   "quadriceps",
+  "abductors",
   "neck",
 ]);
 

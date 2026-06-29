@@ -47,6 +47,7 @@ prisma/dev.db*
 next-env.d.ts
 
 /src/generated/prisma
+temp/
 
 # Python
 __pycache__/

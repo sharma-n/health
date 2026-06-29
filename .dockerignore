@@ -5,6 +5,7 @@ node_modules
 .env
 .env.local
 samples/
+temp/
 src/generated
 README.md
 CLAUDE.md
