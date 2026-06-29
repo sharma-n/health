@@ -439,7 +439,7 @@ describe("POST /api/internal/exercises", () => {
     const body = {
       name: "Banded Pull-Apart",
       equipment: "BAND",
-      primaryMuscles: ["BACK", "SHOULDERS"],
+      primaryMuscles: ["UPPER_BACK", "REAR_DELTS"],
     };
     const res = await postExercise(
       makePost("http://localhost/api/internal/exercises", authHeaders(userId), body),

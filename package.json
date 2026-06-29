@@ -13,6 +13,7 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "db:dev-seed": "tsx --env-file .env scripts/dev-seed.ts",
+    "db:migrate-muscles": "tsx --env-file .env scripts/migrate-muscle-groups.ts",
     "test": "cross-env NODE_OPTIONS=--use-system-ca vitest run",
     "test:unit": "cross-env NODE_OPTIONS=--use-system-ca vitest run src/__tests__/unit src/__tests__/analytics",
     "test:integration": "cross-env NODE_OPTIONS=--use-system-ca vitest run src/__tests__/integration",

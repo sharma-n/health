@@ -5,10 +5,11 @@ import { completeSessionAction, type SessionFormState } from "@/lib/actions/sess
 
 type Props = {
   sessionId: string;
+  totalPausedSeconds: number;
   onCancel: () => void;
 };
 
-export function SessionCompleteForm({ sessionId, onCancel }: Props) {
+export function SessionCompleteForm({ sessionId, totalPausedSeconds, onCancel }: Props) {
   const [state, action] = useActionState<SessionFormState, FormData>(
     completeSessionAction,
     {},
@@ -32,6 +33,7 @@ export function SessionCompleteForm({ sessionId, onCancel }: Props) {
 
         <form action={action} className="space-y-4">
           <input type="hidden" name="sessionId" value={sessionId} />
+          <input type="hidden" name="totalPausedSeconds" value={totalPausedSeconds} />
 
           <div className="space-y-2">
             <p className="text-sm font-medium text-foreground">Overall Effort (RPE)</p>

@@ -53,7 +53,7 @@ describe("createExerciseAction", () => {
     const fd = new FormData();
     fd.set("name", "Test Deadlift");
     fd.set("equipment", "BARBELL");
-    fd.set("primaryMuscles", JSON.stringify(["BACK"]));
+    fd.set("primaryMuscles", JSON.stringify(["UPPER_BACK"]));
     fd.set("secondaryMuscles", JSON.stringify(["HAMSTRINGS"]));
     await createExerciseAction({}, fd);
 

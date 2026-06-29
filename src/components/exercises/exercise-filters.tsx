@@ -3,7 +3,7 @@
 import { useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { EQUIPMENT, MUSCLE_GROUPS, type Equipment, type MuscleGroup } from "@/lib/constants";
+import { EQUIPMENT, MUSCLE_GROUPS, MUSCLE_LABELS, type Equipment, type MuscleGroup } from "@/lib/constants";
 import type { ExerciseFilter } from "@/lib/validation/exercise";
 
 const EQUIPMENT_LABELS: Record<Equipment, string> = {
@@ -17,24 +17,6 @@ const EQUIPMENT_LABELS: Record<Equipment, string> = {
   OTHER: "Other",
 };
 
-const MUSCLE_LABELS: Record<MuscleGroup, string> = {
-  CHEST: "Chest",
-  BACK: "Back",
-  SHOULDERS: "Shoulders",
-  BICEPS: "Biceps",
-  TRICEPS: "Triceps",
-  FOREARMS: "Forearms",
-  QUADS: "Quads",
-  HAMSTRINGS: "Hamstrings",
-  GLUTES: "Glutes",
-  CALVES: "Calves",
-  ABS: "Abs",
-  OBLIQUES: "Obliques",
-  TRAPS: "Traps",
-  LATS: "Lats",
-  NECK: "Neck",
-  FULL_BODY: "Full Body",
-};
 
 export function ExerciseFilters({ defaultValues }: { defaultValues: ExerciseFilter }) {
   const router = useRouter();

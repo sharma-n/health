@@ -419,7 +419,7 @@ async def test_create_exercise_happy_path():
         result = await tool.handler("user1", {
             "name": "Banded Pull-Apart",
             "equipment": "BAND",
-            "primary_muscles": ["BACK", "SHOULDERS"],
+            "primary_muscles": ["UPPER_BACK", "REAR_DELTS"],
             "secondary_muscles": ["TRAPS"],
             "description": "A shoulder health exercise",
             "instructions": "Hold band at shoulder width...",
@@ -451,7 +451,7 @@ async def test_create_exercise_required_only():
 async def test_create_exercise_missing_name():
     tool = _tool("create_exercise")
     with patch("health_agent.tools.write_tools.http_client"):
-        result = await tool.handler("user1", {"equipment": "BAND", "primary_muscles": ["BACK"]})
+        result = await tool.handler("user1", {"equipment": "BAND", "primary_muscles": ["UPPER_BACK"]})
 
     assert "error" in result.lower()
     assert "name" in result.lower()
@@ -461,7 +461,7 @@ async def test_create_exercise_missing_name():
 async def test_create_exercise_missing_equipment():
     tool = _tool("create_exercise")
     with patch("health_agent.tools.write_tools.http_client"):
-        result = await tool.handler("user1", {"name": "Something", "primary_muscles": ["BACK"]})
+        result = await tool.handler("user1", {"name": "Something", "primary_muscles": ["UPPER_BACK"]})
 
     assert "error" in result.lower()
     assert "equipment" in result.lower()

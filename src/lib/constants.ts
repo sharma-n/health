@@ -31,8 +31,10 @@ export type Equipment = (typeof EQUIPMENT)[number];
 
 export const MUSCLE_GROUPS = [
   "CHEST",
-  "BACK",
-  "SHOULDERS",
+  "UPPER_BACK",
+  "LOWER_BACK",
+  "FRONT_DELTS",
+  "REAR_DELTS",
   "BICEPS",
   "TRICEPS",
   "FOREARMS",
@@ -45,9 +47,34 @@ export const MUSCLE_GROUPS = [
   "TRAPS",
   "LATS",
   "NECK",
-  "FULL_BODY",
+  "ADDUCTORS",
+  "ABDUCTORS",
+  "CARDIO",
 ] as const;
 export type MuscleGroup = (typeof MUSCLE_GROUPS)[number];
+
+export const MUSCLE_LABELS: Record<MuscleGroup, string> = {
+  CHEST: "Chest",
+  UPPER_BACK: "Upper Back",
+  LOWER_BACK: "Lower Back",
+  FRONT_DELTS: "Front Delts",
+  REAR_DELTS: "Rear Delts",
+  BICEPS: "Biceps",
+  TRICEPS: "Triceps",
+  FOREARMS: "Forearms",
+  QUADS: "Quads",
+  HAMSTRINGS: "Hamstrings",
+  GLUTES: "Glutes",
+  CALVES: "Calves",
+  ABS: "Abs",
+  OBLIQUES: "Obliques",
+  TRAPS: "Traps",
+  LATS: "Lats",
+  NECK: "Neck",
+  ADDUCTORS: "Adductors",
+  ABDUCTORS: "Abductors",
+  CARDIO: "Cardio",
+};
 
 export const BODY_METRIC_TYPES = [
   "BODYWEIGHT",

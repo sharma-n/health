@@ -268,8 +268,10 @@ export async function completeSessionAction(
   if (existing.endedAt) return { error: "Session already completed." };
 
   const endedAt = new Date();
-  const durationSeconds = Math.floor(
-    (endedAt.getTime() - existing.startedAt.getTime()) / 1000,
+  const totalPausedSeconds = Math.max(0, Number(formData.get("totalPausedSeconds") ?? 0));
+  const durationSeconds = Math.max(
+    0,
+    Math.floor((endedAt.getTime() - existing.startedAt.getTime()) / 1000) - totalPausedSeconds,
   );
 
   await prisma.session.update({

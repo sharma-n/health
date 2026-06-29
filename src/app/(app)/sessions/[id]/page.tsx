@@ -126,6 +126,7 @@ export default async function SessionDetailPage({
         name: true,
         equipment: true,
         primaryMuscles: true,
+        secondaryMuscles: true,
         isSystem: true,
       },
       orderBy: { name: "asc" },

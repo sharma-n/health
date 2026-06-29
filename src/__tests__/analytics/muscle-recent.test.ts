@@ -42,10 +42,10 @@ describe("getMuscleRecentVolume", () => {
 
   it("accumulates across multiple exercises for the same muscle", async () => {
     const sessionExercises = [
-      { exercise: { primaryMuscles: ["BACK"] }, sets: [{ id: "s1" }, { id: "s2" }] },
-      { exercise: { primaryMuscles: ["BACK"] }, sets: [{ id: "s3" }] },
+      { exercise: { primaryMuscles: ["UPPER_BACK"] }, sets: [{ id: "s1" }, { id: "s2" }] },
+      { exercise: { primaryMuscles: ["UPPER_BACK"] }, sets: [{ id: "s3" }] },
     ];
     const result = await getMuscleRecentVolume("u", makePrisma(sessionExercises));
-    expect(result.BACK).toBe(3);
+    expect(result.UPPER_BACK).toBe(3);
   });
 });

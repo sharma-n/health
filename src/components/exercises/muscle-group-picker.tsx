@@ -2,26 +2,7 @@
 
 import { useState } from "react";
 
-import { MUSCLE_GROUPS, type MuscleGroup } from "@/lib/constants";
-
-const MUSCLE_LABELS: Record<MuscleGroup, string> = {
-  CHEST: "Chest",
-  BACK: "Back",
-  SHOULDERS: "Shoulders",
-  BICEPS: "Biceps",
-  TRICEPS: "Triceps",
-  FOREARMS: "Forearms",
-  QUADS: "Quads",
-  HAMSTRINGS: "Hamstrings",
-  GLUTES: "Glutes",
-  CALVES: "Calves",
-  ABS: "Abs",
-  OBLIQUES: "Obliques",
-  TRAPS: "Traps",
-  LATS: "Lats",
-  NECK: "Neck",
-  FULL_BODY: "Full Body",
-};
+import { MUSCLE_GROUPS, MUSCLE_LABELS, type MuscleGroup } from "@/lib/constants";
 
 export function MuscleGroupPicker({
   name,

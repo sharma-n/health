@@ -523,8 +523,9 @@ def _create_exercise_tool() -> Tool:
                         "items": {"type": "string"},
                         "description": (
                             "Primary muscles targeted. At least one required. "
-                            "Valid values: CHEST, BACK, SHOULDERS, BICEPS, TRICEPS, FOREARMS, "
-                            "QUADS, HAMSTRINGS, GLUTES, CALVES, ABS, OBLIQUES, TRAPS, LATS, NECK, FULL_BODY."
+                            "Valid values: CHEST, UPPER_BACK, LOWER_BACK, FRONT_DELTS, REAR_DELTS, "
+                            "BICEPS, TRICEPS, FOREARMS, QUADS, HAMSTRINGS, GLUTES, CALVES, ABS, "
+                            "OBLIQUES, TRAPS, LATS, NECK, ADDUCTORS, ABDUCTORS, CARDIO."
                         ),
                     },
                     "secondary_muscles": {

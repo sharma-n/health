@@ -17,8 +17,10 @@ const ANTERIOR_MUSCLES = new Set<Muscle>([
 
 const MUSCLE_MAP: Partial<Record<MuscleGroup, Muscle[]>> = {
   CHEST: ["chest"],
-  BACK: ["upper-back", "lower-back"],
-  SHOULDERS: ["front-deltoids", "back-deltoids"],
+  UPPER_BACK: ["upper-back"],
+  LOWER_BACK: ["lower-back"],
+  FRONT_DELTS: ["front-deltoids"],
+  REAR_DELTS: ["back-deltoids"],
   BICEPS: ["biceps"],
   TRICEPS: ["triceps"],
   FOREARMS: ["forearm"],
@@ -31,12 +33,9 @@ const MUSCLE_MAP: Partial<Record<MuscleGroup, Muscle[]>> = {
   TRAPS: ["trapezius"],
   LATS: ["upper-back"],
   NECK: ["neck"],
-  FULL_BODY: [
-    "chest", "biceps", "forearm", "front-deltoids",
-    "abs", "obliques", "quadriceps", "neck",
-    "trapezius", "upper-back", "lower-back", "back-deltoids",
-    "triceps", "hamstring", "gluteal", "calves",
-  ],
+  ADDUCTORS: ["adductor"],
+  ABDUCTORS: ["abductors"],
+  CARDIO: [],
 };
 
 const DEFAULT_COLORS: [string, string, string] = ["#f97316", "#ef4444", "#b91c1c"];

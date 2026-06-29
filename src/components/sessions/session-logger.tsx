@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Loader2, Pause, Play } from "lucide-react";
 import {
   upsertSetAction,
   setRestAction,
@@ -218,19 +218,50 @@ export function SessionLogger({
   });
   const [pickerOpen, setPickerOpen] = useState(false);
   const [showComplete, setShowComplete] = useState(false);
+  const [capturedPausedSeconds, setCapturedPausedSeconds] = useState(0);
   const [elapsed, setElapsed] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
 
   const startedAt = useRef(session.startedAt);
+  const isPausedRef = useRef(false);
+  const pauseStartMsRef = useRef<number | null>(null);
+  const accumulatedPausedMsRef = useRef(0);
 
-  // Elapsed timer
+  // Elapsed timer — skips updates while paused and subtracts accumulated paused time
   useEffect(() => {
     const update = () => {
-      setElapsed(Math.floor((Date.now() - startedAt.current.getTime()) / 1000));
+      if (isPausedRef.current) return;
+      const raw = Date.now() - startedAt.current.getTime() - accumulatedPausedMsRef.current;
+      setElapsed(Math.floor(raw / 1000));
     };
     update();
     const id = setInterval(update, 1000);
     return () => clearInterval(id);
   }, []);
+
+  function togglePause() {
+    if (isPausedRef.current) {
+      if (pauseStartMsRef.current !== null) {
+        accumulatedPausedMsRef.current += Date.now() - pauseStartMsRef.current;
+        pauseStartMsRef.current = null;
+      }
+      isPausedRef.current = false;
+      setIsPaused(false);
+    } else {
+      pauseStartMsRef.current = Date.now();
+      isPausedRef.current = true;
+      setIsPaused(true);
+    }
+  }
+
+  function openCompleteForm() {
+    const currentMs =
+      isPausedRef.current && pauseStartMsRef.current !== null
+        ? accumulatedPausedMsRef.current + (Date.now() - pauseStartMsRef.current)
+        : accumulatedPausedMsRef.current;
+    setCapturedPausedSeconds(Math.floor(currentMs / 1000));
+    setShowComplete(true);
+  }
 
   const current = exercises[currentIdx];
   const targetMap = new Map(workoutExercises.map((t) => [t.exerciseId, t]));
@@ -454,10 +485,31 @@ export function SessionLogger({
     <div className="space-y-4 pb-24">
       {/* Header bar */}
       <div className="flex items-center justify-between rounded-[var(--radius-app)] border border-border bg-surface px-4 py-3">
-        <p className="text-sm font-medium text-muted-foreground">Elapsed</p>
-        <p className="font-mono text-lg font-semibold text-foreground tabular-nums">
-          {formatElapsed(elapsed)}
-        </p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-medium text-muted-foreground">Elapsed</p>
+          {isPaused && (
+            <span className="rounded-full bg-warning/15 px-2 py-0.5 text-xs font-semibold text-warning">
+              PAUSED
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <p className={`font-mono text-lg font-semibold tabular-nums ${isPaused ? "text-muted-foreground" : "text-foreground"}`}>
+            {formatElapsed(elapsed)}
+          </p>
+          <button
+            type="button"
+            onClick={togglePause}
+            className={`flex h-8 w-8 items-center justify-center rounded-full border transition-colors ${
+              isPaused
+                ? "border-warning/50 bg-warning/10 text-warning hover:bg-warning/20"
+                : "border-border bg-surface text-muted-foreground hover:border-primary/40 hover:text-foreground"
+            }`}
+            aria-label={isPaused ? "Resume session" : "Pause session"}
+          >
+            {isPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+          </button>
+        </div>
       </div>
 
       {exercises.length === 0 ? (
@@ -540,6 +592,7 @@ export function SessionLogger({
               totalSeconds={restTimer.totalSeconds}
               onComplete={handleRestComplete}
               onSkip={handleRestSkip}
+              isPaused={isPaused}
             />
           )}
 
@@ -627,7 +680,7 @@ export function SessionLogger({
         </button>
         <button
           type="button"
-          onClick={() => setShowComplete(true)}
+          onClick={openCompleteForm}
           className="flex flex-1 items-center justify-center h-11 rounded-[var(--radius-app)] bg-primary font-medium text-primary-foreground transition-opacity hover:opacity-90"
         >
           Finish Session
@@ -646,6 +699,7 @@ export function SessionLogger({
       {showComplete && (
         <SessionCompleteForm
           sessionId={session.id}
+          totalPausedSeconds={capturedPausedSeconds}
           onCancel={() => setShowComplete(false)}
         />
       )}

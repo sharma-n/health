@@ -7,10 +7,11 @@ type RestTimerProps = {
   totalSeconds: number;
   onComplete: (actualSeconds: number) => void;
   onSkip: (actualSeconds: number) => void;
+  isPaused?: boolean;
 };
 
 // Remount this component (via key prop on parent) to restart with new duration.
-export function RestTimer({ totalSeconds, onComplete, onSkip }: RestTimerProps) {
+export function RestTimer({ totalSeconds, onComplete, onSkip, isPaused = false }: RestTimerProps) {
   const [remaining, setRemaining] = useState(totalSeconds);
   const startedAtRef = useRef<number | null>(null);
 
@@ -26,9 +27,11 @@ export function RestTimer({ totalSeconds, onComplete, onSkip }: RestTimerProps) 
       return;
     }
 
+    if (isPaused) return; // hold countdown while session is paused
+
     const t = setTimeout(() => setRemaining((r) => r - 1), 1000);
     return () => clearTimeout(t);
-  }, [remaining, onComplete]);
+  }, [remaining, onComplete, isPaused]);
 
   const pct = Math.min(100, ((totalSeconds - remaining) / totalSeconds) * 100);
   const m = Math.floor(remaining / 60);

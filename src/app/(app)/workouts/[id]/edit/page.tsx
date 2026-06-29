@@ -25,6 +25,7 @@ const EXERCISE_PICKER_SELECT = {
   name: true,
   equipment: true,
   primaryMuscles: true,
+  secondaryMuscles: true,
   isSystem: true,
 } as const;
 
