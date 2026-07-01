@@ -32,6 +32,9 @@ export const setRestSchema = z.object({
   restSeconds: z.number().int().nonnegative(),
 });
 
+// Delete a single set during live logging.
+export const deleteSetSchema = z.object({ setId: z.string().min(1) });
+
 // Finish a session: overall effort (1..10 RPE) + notes.
 export const completeSessionSchema = z.object({
   sessionId: z.string().min(1),
@@ -45,9 +48,17 @@ export const addExerciseToSessionSchema = z.object({
   exerciseId: z.string().cuid(),
 });
 
+// Swap the exercise attached to a SessionExercise slot, session-only (template untouched).
+export const replaceSessionExerciseSchema = z.object({
+  sessionExerciseId: z.string().min(1),
+  exerciseId: z.string().min(1),
+});
+
 export type StartSessionInput = z.infer<typeof startSessionSchema>;
 export type SessionSetInput = z.infer<typeof sessionSetSchema>;
 export type UpsertSetInput = z.infer<typeof upsertSetSchema>;
 export type SetRestInput = z.infer<typeof setRestSchema>;
+export type DeleteSetInput = z.infer<typeof deleteSetSchema>;
 export type CompleteSessionInput = z.infer<typeof completeSessionSchema>;
 export type AddExerciseToSessionInput = z.infer<typeof addExerciseToSessionSchema>;
+export type ReplaceSessionExerciseInput = z.infer<typeof replaceSessionExerciseSchema>;

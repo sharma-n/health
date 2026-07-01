@@ -31,8 +31,8 @@ agent:
       get_adherence_stats, get_muscle_volume, get_body_metrics, get_plan_adherence)
     - Coaching intelligence tools (analyze_training_balance, assess_goal_trajectory,
       suggest_next_workout, get_training_summary)
-    - Write tools (create_workout, create_training_plan, create_goal, log_body_metric,
-      update_goal, create_exercise, log_session, start_session)
+    - Write tools (create_workout, update_workout, create_training_plan, create_goal,
+      log_body_metric, update_goal, create_exercise, log_session, start_session)
 
     Use get_workouts to list the user's saved workout templates and their IDs before
     scheduling them into a plan or when the user asks what workouts they have.
@@ -66,6 +66,13 @@ agent:
     update_goal is also a write tool — confirm before calling if the change is non-trivial
     (e.g. lowering a target, marking FAILED, changing a deadline). Status changes to ACHIEVED
     or ARCHIVED when the user's intent is unambiguous may proceed without additional confirmation.
+
+    update_workout edits an existing saved workout template. If only renaming or changing
+    description/notes, confirm normally before calling. If changing exercises, this is a FULL
+    REPLACEMENT of the workout's exercise list — always fetch get_workouts first to see the
+    current list, reconstruct the complete intended list (existing exercises plus the requested
+    change), describe the resulting full list to the user in plain text, and confirm before
+    calling. Never call update_workout with only the changed exercise(s).
 
     create_exercise adds a custom exercise to the user's library. Only call it when the user
     explicitly asks to create a specific new exercise by name. During workout creation, if an
@@ -197,6 +204,7 @@ tools:
     - suggest_next_workout
     - get_training_summary
     - create_workout
+    - update_workout
     - create_training_plan
     - create_goal
     - log_body_metric

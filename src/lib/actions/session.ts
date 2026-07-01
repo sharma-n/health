@@ -10,8 +10,10 @@ import {
   startSessionSchema,
   upsertSetSchema,
   setRestSchema,
+  deleteSetSchema,
   completeSessionSchema,
   addExerciseToSessionSchema,
+  replaceSessionExerciseSchema,
   type UpsertSetInput,
 } from "@/lib/validation/session";
 
@@ -133,6 +135,60 @@ export async function addExerciseToSessionAction(
 }
 
 // --------------------------------------------------------------------------
+// Replace the exercise on an existing session slot (session-only; the source
+// workout template, if any, is never modified). Deletes the old SessionExercise
+// (cascades its sets) and creates a new one at the same order, atomically.
+// --------------------------------------------------------------------------
+export async function replaceSessionExerciseAction(
+  sessionExerciseId: string,
+  exerciseId: string,
+): Promise<SessionFormState> {
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) return { error: "Unauthorized." };
+
+  if (await sessionRateLimited(userId)) {
+    return { error: "Too many requests. Please wait a moment." };
+  }
+
+  const parsed = replaceSessionExerciseSchema.safeParse({ sessionExerciseId, exerciseId });
+  if (!parsed.success) return { error: "Invalid input." };
+
+  const existing = await prisma.sessionExercise.findUnique({
+    where: { id: parsed.data.sessionExerciseId },
+    select: {
+      order: true,
+      sessionId: true,
+      exerciseId: true,
+      session: { select: { userId: true, endedAt: true } },
+    },
+  });
+  if (!existing || existing.session.userId !== userId) return NOT_FOUND;
+  if (existing.session.endedAt) return { error: "Session already completed." };
+
+  // No-op guard: replacing with the same exercise is rejected server-side too
+  // (defense-in-depth; the client also excludes the current exercise from the picker).
+  if (existing.exerciseId === parsed.data.exerciseId) {
+    return { error: "That exercise is already in this slot." };
+  }
+
+  const [, created] = await prisma.$transaction([
+    prisma.sessionExercise.delete({ where: { id: parsed.data.sessionExerciseId } }),
+    prisma.sessionExercise.create({
+      data: {
+        sessionId: existing.sessionId,
+        exerciseId: parsed.data.exerciseId,
+        order: existing.order,
+      },
+      select: { id: true },
+    }),
+  ]);
+
+  revalidatePath(`/sessions/${existing.sessionId}`);
+  return { success: "Exercise replaced.", sessionExerciseId: created.id };
+}
+
+// --------------------------------------------------------------------------
 // Create or update a single set during live logging. Called directly from
 // client code. Returns the persisted set ID for optimistic state updates.
 // --------------------------------------------------------------------------
@@ -230,6 +286,56 @@ export async function setRestAction(
   });
 
   return { success: "Rest recorded." };
+}
+
+// --------------------------------------------------------------------------
+// Delete a single set during live logging. Renumbers remaining sibling sets
+// for the same exercise to stay contiguous (1..N) so the UI never shows gaps.
+// --------------------------------------------------------------------------
+export async function deleteSetAction(setId: string): Promise<SessionFormState> {
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) return { error: "Unauthorized." };
+
+  if (await sessionRateLimited(userId)) {
+    return { error: "Too many requests. Please wait a moment." };
+  }
+
+  const parsed = deleteSetSchema.safeParse({ setId });
+  if (!parsed.success) return { error: "Invalid input." };
+
+  // Ownership chain: SessionSet → SessionExercise → Session → userId
+  const existingSet = await prisma.sessionSet.findUnique({
+    where: { id: parsed.data.setId },
+    select: {
+      sessionExerciseId: true,
+      sessionExercise: {
+        select: { session: { select: { userId: true, endedAt: true } } },
+      },
+    },
+  });
+  if (!existingSet || existingSet.sessionExercise.session.userId !== userId) {
+    return NOT_FOUND;
+  }
+  if (existingSet.sessionExercise.session.endedAt) {
+    return { error: "Session already completed." };
+  }
+
+  const siblings = await prisma.sessionSet.findMany({
+    where: { sessionExerciseId: existingSet.sessionExerciseId },
+    orderBy: { setNumber: "asc" },
+    select: { id: true },
+  });
+  const remaining = siblings.filter((s) => s.id !== parsed.data.setId);
+
+  await prisma.$transaction([
+    prisma.sessionSet.delete({ where: { id: parsed.data.setId } }),
+    ...remaining.map((s, i) =>
+      prisma.sessionSet.update({ where: { id: s.id }, data: { setNumber: i + 1 } }),
+    ),
+  ]);
+
+  return { success: "Set deleted." };
 }
 
 // --------------------------------------------------------------------------

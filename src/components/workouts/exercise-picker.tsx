@@ -25,12 +25,14 @@ export function ExercisePicker({
   onSelect,
   availableExercises,
   addedExerciseIds,
+  title = "Add Exercise",
 }: {
   isOpen: boolean;
   onClose: () => void;
   onSelect: (exercise: AvailableExercise) => void;
   availableExercises: AvailableExercise[];
   addedExerciseIds: Set<string>;
+  title?: string;
 }) {
   const [search, setSearch] = useState("");
   const [selectedMuscle, setSelectedMuscle] = useState<MuscleGroup | null>(null);
@@ -66,7 +68,7 @@ export function ExercisePicker({
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50">
       <div className="w-full max-w-lg rounded-t-[var(--radius-app)] sm:rounded-[var(--radius-app)] bg-background p-4 max-h-[28rem] flex flex-col">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="font-semibold text-foreground">Add Exercise</h2>
+          <h2 className="font-semibold text-foreground">{title}</h2>
           <button
             onClick={onClose}
             className="text-muted-foreground hover:text-foreground transition-colors"

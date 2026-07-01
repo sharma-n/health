@@ -94,6 +94,7 @@ async def _resolve_workout_id(user_id: str, name: str, workouts: list[dict]) -> 
 def get_write_tools() -> list[Tool]:
     return [
         _create_workout_tool(),
+        _update_workout_tool(),
         _create_training_plan_tool(),
         _create_goal_tool(),
         _log_body_metric_tool(),
@@ -203,6 +204,147 @@ def _create_workout_tool() -> Tool:
                     },
                 },
                 "required": ["name"],
+            },
+        ),
+        handler=handler,
+    )
+
+
+def _update_workout_tool() -> Tool:
+    async def handler(user_id: str, args: dict[str, Any]) -> str:
+        workout_id = str(args.get("workout_id", "")).strip() or None
+        workout_name = str(args.get("workout_name", "")).strip() or None
+
+        if not workout_id and not workout_name:
+            return "error: workout_id or workout_name is required"
+
+        if not workout_id:
+            workouts_raw = await _get(user_id, "/api/internal/workouts")
+            try:
+                workouts: list[dict] = json.loads(workouts_raw)
+            except Exception:
+                return f"error fetching workouts: {workouts_raw}"
+            workout_id = await _resolve_workout_id(user_id, workout_name, workouts)
+            if workout_id is None:
+                return f"error: workout '{workout_name}' not found. Use get_workouts to list saved workouts."
+
+        payload: dict[str, Any] = {}
+        if str(args.get("new_name", "")).strip():
+            payload["name"] = str(args["new_name"]).strip()
+        if "description" in args:
+            payload["description"] = args["description"]
+        if "notes" in args:
+            payload["notes"] = args["notes"]
+
+        exercises_raw = args.get("exercises")
+        if exercises_raw is not None:
+            resolved: list[dict] = []
+            unresolved: list[str] = []
+            for ex in exercises_raw:
+                ex_name = str(ex.get("exercise_name", "")).strip()
+                if not ex_name:
+                    continue
+                ex_id = await _resolve_exercise_id(user_id, ex_name)
+                if ex_id is None:
+                    unresolved.append(ex_name)
+                else:
+                    entry: dict[str, Any] = {
+                        "exerciseId": ex_id,
+                        "targetSets": ex.get("target_sets"),
+                        "targetReps": ex.get("target_reps"),
+                        "targetWeightKg": ex.get("target_weight_kg"),
+                        "restSeconds": ex.get("rest_seconds"),
+                        "notes": ex.get("notes"),
+                    }
+                    if ex.get("superset_group"):
+                        entry["supersetGroup"] = str(ex["superset_group"]).strip()
+                    resolved.append(entry)
+
+            if unresolved:
+                return f"error: could not find exercises: {', '.join(unresolved)}. Use get_exercises to search."
+            payload["exercises"] = resolved
+
+        if not payload:
+            return "error: no fields to update provided"
+
+        status_code, text = await _patch(user_id, f"/api/internal/workouts/{workout_id}", payload)
+        if status_code == 404:
+            return f"error: workout '{workout_id}' not found. Use get_workouts to list saved workouts."
+        if status_code != 200:
+            return f"error {status_code}: {text[:200]}"
+
+        changes = ", ".join(payload.keys())
+        return f"Updated workout '{workout_id}' — changed: {changes}."
+
+    return Tool(
+        definition=ToolDefinition(
+            name="update_workout",
+            description=(
+                "Update an existing saved workout template. Provide either workout_id (if you "
+                "already have it from a prior get_workouts call this turn) or workout_name (this "
+                "tool will resolve it via get_workouts). All fields are optional except the "
+                "identifier — only provided fields are changed.\n\n"
+                "CRITICAL — exercises is a FULL REPLACEMENT, not a diff: if you pass exercises, "
+                "the ENTIRE exercise list on the workout is replaced with exactly what you "
+                "provide — any exercise not included will be REMOVED from the workout. There is "
+                "no way to patch a single exercise in place.\n\n"
+                "Before calling this tool with exercises, you MUST: (1) call get_workouts (if you "
+                "have not already this turn) to see the current full exercise list; (2) if the "
+                "user asked to add, remove, or change ONE exercise, reconstruct the COMPLETE "
+                "intended list — copy every existing exercise entry unchanged, then apply just "
+                "the one requested change, and pass ALL of them in exercises; (3) never call this "
+                "tool with only the changed exercise(s) — that will silently delete every other "
+                "exercise on the workout.\n\n"
+                "If you are only renaming the workout or changing its description/notes, omit "
+                "exercises entirely — the existing exercises will be left untouched.\n\n"
+                "Always describe the resulting full exercise list changes in plain text and ask "
+                "for confirmation before calling this tool when exercises is provided."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "workout_id": {
+                        "type": "string",
+                        "description": "ID of the workout to update, if already known (e.g. from a recent get_workouts call).",
+                    },
+                    "workout_name": {
+                        "type": "string",
+                        "description": "Name of the workout to update (resolved via get_workouts if workout_id is not provided).",
+                    },
+                    "new_name": {"type": "string", "description": "New name for the workout."},
+                    "description": {
+                        "type": ["string", "null"],
+                        "description": "New description, or null to clear it.",
+                    },
+                    "notes": {
+                        "type": ["string", "null"],
+                        "description": "New notes, or null to clear them.",
+                    },
+                    "exercises": {
+                        "type": "array",
+                        "description": (
+                            "FULL replacement list of exercises — must include every exercise the "
+                            "workout should have after this call, not just changed ones."
+                        ),
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "exercise_name": {"type": "string", "description": "Name of the exercise (used to look up the ID)."},
+                                "target_sets": {"type": "integer", "description": "Target number of sets."},
+                                "target_reps": {"type": "integer", "description": "Target reps per set."},
+                                "target_weight_kg": {"type": "number", "description": "Target weight in kg."},
+                                "rest_seconds": {"type": "integer", "description": "Rest between sets in seconds."},
+                                "notes": {"type": "string", "description": "Exercise-specific coaching notes."},
+                                "superset_group": {
+                                    "type": "string",
+                                    "description": "Optional superset label (e.g. 'A', 'B'). Exercises sharing a label are displayed as a superset.",
+                                },
+                            },
+                            "required": ["exercise_name"],
+                        },
+                    },
+                },
+                "required": [],
             },
         ),
         handler=handler,

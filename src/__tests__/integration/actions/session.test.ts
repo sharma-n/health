@@ -6,8 +6,10 @@ import {
   addExerciseToSessionAction,
   upsertSetAction,
   setRestAction,
+  deleteSetAction,
   completeSessionAction,
   deleteSessionAction,
+  replaceSessionExerciseAction,
 } from "@/lib/actions/session";
 
 beforeAll(async () => {
@@ -97,6 +99,95 @@ describe("addExerciseToSessionAction", () => {
   });
 });
 
+describe("replaceSessionExerciseAction", () => {
+  it("returns Unauthorized when not authenticated", async () => {
+    vi.mocked(auth).mockResolvedValue(null);
+    const result = await replaceSessionExerciseAction("se-id", "ex-id");
+    expect(result.error).toBe("Unauthorized.");
+  });
+
+  it("returns not found for another user's session", async () => {
+    const { db } = await setup();
+    const { id: otherUserId } = await seedTestUser(db, { email: `replother-${Date.now()}@test.com` });
+    const { id: exA } = await seedTestExercise(db, otherUserId, `ReplA-${Date.now()}`);
+    const { id: exB } = await seedTestExercise(db, otherUserId, `ReplB-${Date.now()}`);
+    const { id: sessionId } = await db.session.create({
+      data: { userId: otherUserId, startedAt: new Date() },
+      select: { id: true },
+    });
+    const { id: seId } = await db.sessionExercise.create({
+      data: { sessionId, exerciseId: exA, order: 0 },
+      select: { id: true },
+    });
+
+    const result = await replaceSessionExerciseAction(seId, exB);
+    expect(result.error).toBe("Session not found.");
+
+    const untouched = await db.sessionExercise.findUnique({ where: { id: seId } });
+    expect(untouched).not.toBeNull();
+  });
+
+  it("returns error when session already completed", async () => {
+    const { db, userId } = await setup();
+    const { id: exA } = await seedTestExercise(db, userId, `ReplC-${Date.now()}`);
+    const { id: exB } = await seedTestExercise(db, userId, `ReplD-${Date.now()}`);
+    const { id: sessionId } = await db.session.create({
+      data: { userId, startedAt: new Date(), endedAt: new Date() },
+      select: { id: true },
+    });
+    const { id: seId } = await db.sessionExercise.create({
+      data: { sessionId, exerciseId: exA, order: 0 },
+      select: { id: true },
+    });
+
+    const result = await replaceSessionExerciseAction(seId, exB);
+    expect(result.error).toBe("Session already completed.");
+  });
+
+  it("replaces the exercise, cascades old sets, and preserves order", async () => {
+    const { db, userId } = await setup();
+    const { id: exA } = await seedTestExercise(db, userId, `ReplE-${Date.now()}`);
+    const { id: exB } = await seedTestExercise(db, userId, `ReplF-${Date.now()}`);
+    const { id: sessionId } = await db.session.create({ data: { userId, startedAt: new Date() }, select: { id: true } });
+    const { id: seId } = await db.sessionExercise.create({
+      data: { sessionId, exerciseId: exA, order: 1 },
+      select: { id: true },
+    });
+    await db.sessionSet.create({ data: { sessionExerciseId: seId, setNumber: 1, completed: true } });
+
+    const result = await replaceSessionExerciseAction(seId, exB);
+    expect(result.success).toBeDefined();
+    expect(result.sessionExerciseId).toBeDefined();
+    expect(result.sessionExerciseId).not.toBe(seId);
+
+    const oldRow = await db.sessionExercise.findUnique({ where: { id: seId } });
+    expect(oldRow).toBeNull();
+
+    const oldSets = await db.sessionSet.findMany({ where: { sessionExerciseId: seId } });
+    expect(oldSets).toHaveLength(0);
+
+    const newRow = await db.sessionExercise.findUnique({ where: { id: result.sessionExerciseId! } });
+    expect(newRow?.exerciseId).toBe(exB);
+    expect(newRow?.order).toBe(1);
+  });
+
+  it("rejects replacing with the same exercise (no-op guard)", async () => {
+    const { db, userId } = await setup();
+    const { id: exA } = await seedTestExercise(db, userId, `ReplG-${Date.now()}`);
+    const { id: sessionId } = await db.session.create({ data: { userId, startedAt: new Date() }, select: { id: true } });
+    const { id: seId } = await db.sessionExercise.create({
+      data: { sessionId, exerciseId: exA, order: 0 },
+      select: { id: true },
+    });
+
+    const result = await replaceSessionExerciseAction(seId, exA);
+    expect(result.error).toBeDefined();
+
+    const stillThere = await db.sessionExercise.findUnique({ where: { id: seId } });
+    expect(stillThere).not.toBeNull();
+  });
+});
+
 describe("upsertSetAction", () => {
   it("returns Unauthorized when not authenticated", async () => {
     vi.mocked(auth).mockResolvedValue(null);
@@ -149,6 +240,82 @@ describe("setRestAction", () => {
 
     const set = await db.sessionSet.findUnique({ where: { id: setId } });
     expect(set?.restSeconds).toBe(90);
+  });
+});
+
+describe("deleteSetAction", () => {
+  it("returns Unauthorized when not authenticated", async () => {
+    vi.mocked(auth).mockResolvedValue(null);
+    const result = await deleteSetAction("set-id");
+    expect(result.error).toBe("Unauthorized.");
+  });
+
+  it("returns not found for another user's set", async () => {
+    const { db } = await setup();
+    const { id: otherUserId } = await seedTestUser(db, { email: `delother-${Date.now()}@test.com` });
+    const { id: exId } = await seedTestExercise(db, otherUserId, `DelEx-${Date.now()}`);
+    const { id: sessionId } = await db.session.create({ data: { userId: otherUserId, startedAt: new Date() }, select: { id: true } });
+    const { id: seId } = await db.sessionExercise.create({ data: { sessionId, exerciseId: exId, order: 0 }, select: { id: true } });
+    const { id: setId } = await db.sessionSet.create({ data: { sessionExerciseId: seId, setNumber: 1 }, select: { id: true } });
+
+    const result = await deleteSetAction(setId);
+    expect(result.error).toBe("Session not found.");
+
+    const stillThere = await db.sessionSet.findUnique({ where: { id: setId } });
+    expect(stillThere).not.toBeNull();
+  });
+
+  it("returns error when session already completed", async () => {
+    const { db, userId } = await setup();
+    const { id: exId } = await seedTestExercise(db, userId, `DelEx2-${Date.now()}`);
+    const { id: sessionId } = await db.session.create({
+      data: { userId, startedAt: new Date(), endedAt: new Date() },
+      select: { id: true },
+    });
+    const { id: seId } = await db.sessionExercise.create({ data: { sessionId, exerciseId: exId, order: 0 }, select: { id: true } });
+    const { id: setId } = await db.sessionSet.create({ data: { sessionExerciseId: seId, setNumber: 1 }, select: { id: true } });
+
+    const result = await deleteSetAction(setId);
+    expect(result.error).toBe("Session already completed.");
+
+    const stillThere = await db.sessionSet.findUnique({ where: { id: setId } });
+    expect(stillThere).not.toBeNull();
+  });
+
+  it("removes the set from the database", async () => {
+    const { db, userId } = await setup();
+    const { id: exId } = await seedTestExercise(db, userId, `DelEx3-${Date.now()}`);
+    const { id: sessionId } = await db.session.create({ data: { userId, startedAt: new Date() }, select: { id: true } });
+    const { id: seId } = await db.sessionExercise.create({ data: { sessionId, exerciseId: exId, order: 0 }, select: { id: true } });
+    const { id: setId } = await db.sessionSet.create({ data: { sessionExerciseId: seId, setNumber: 1 }, select: { id: true } });
+
+    const result = await deleteSetAction(setId);
+    expect(result.success).toBeDefined();
+
+    const set = await db.sessionSet.findUnique({ where: { id: setId } });
+    expect(set).toBeNull();
+  });
+
+  it("renumbers remaining sibling sets to stay contiguous", async () => {
+    const { db, userId } = await setup();
+    const { id: exId } = await seedTestExercise(db, userId, `DelEx4-${Date.now()}`);
+    const { id: sessionId } = await db.session.create({ data: { userId, startedAt: new Date() }, select: { id: true } });
+    const { id: seId } = await db.sessionExercise.create({ data: { sessionId, exerciseId: exId, order: 0 }, select: { id: true } });
+
+    const set1 = await db.sessionSet.create({ data: { sessionExerciseId: seId, setNumber: 1 }, select: { id: true } });
+    const set2 = await db.sessionSet.create({ data: { sessionExerciseId: seId, setNumber: 2 }, select: { id: true } });
+    const set3 = await db.sessionSet.create({ data: { sessionExerciseId: seId, setNumber: 3 }, select: { id: true } });
+
+    const result = await deleteSetAction(set2.id);
+    expect(result.success).toBeDefined();
+
+    const remaining = await db.sessionSet.findMany({
+      where: { sessionExerciseId: seId },
+      orderBy: { setNumber: "asc" },
+    });
+    expect(remaining).toHaveLength(2);
+    expect(remaining.map((s: { id: string }) => s.id)).toEqual([set1.id, set3.id]);
+    expect(remaining.map((s: { setNumber: number }) => s.setNumber)).toEqual([1, 2]);
   });
 });
 

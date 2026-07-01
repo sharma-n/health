@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Loader2, Pause, Play } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Loader2, Pause, Play, X, Repeat } from "lucide-react";
 import {
   upsertSetAction,
   setRestAction,
   addExerciseToSessionAction,
+  deleteSetAction,
+  replaceSessionExerciseAction,
 } from "@/lib/actions/session";
 import { fromKg, toKg, weightUnitLabel } from "@/lib/units";
 import type { UnitPreference } from "@/lib/constants";
@@ -218,6 +220,7 @@ export function SessionLogger({
     nextExerciseIdx: null,
   });
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerMode, setPickerMode] = useState<"add" | "replace">("add");
   const [showComplete, setShowComplete] = useState(false);
   const [capturedPausedSeconds, setCapturedPausedSeconds] = useState(0);
   const [elapsed, setElapsed] = useState(0);
@@ -420,6 +423,43 @@ export function SessionLogger({
     );
   }
 
+  async function handleDeleteSlot(seIdx: number, slotIdx: number) {
+    const ex = exercises[seIdx];
+    const slot = ex.slots[slotIdx];
+    if (!slot) return;
+
+    if (slot.id === null) {
+      // Client-only draft row — never persisted, just remove locally.
+      setExercises((prev) =>
+        prev.map((exState, ei) =>
+          ei !== seIdx
+            ? exState
+            : { ...exState, slots: exState.slots.filter((_, si) => si !== slotIdx) },
+        ),
+      );
+      return;
+    }
+
+    updateSlot(seIdx, slotIdx, { saving: true });
+    const result = await deleteSetAction(slot.id);
+    if (result.error) {
+      updateSlot(seIdx, slotIdx, { saving: false });
+      return;
+    }
+
+    setExercises((prev) =>
+      prev.map((exState, ei) => {
+        if (ei !== seIdx) return exState;
+        const filtered = exState.slots.filter((_, si) => si !== slotIdx);
+        // Renumber locally to mirror the server-side renumbering.
+        return {
+          ...exState,
+          slots: filtered.map((s, i) => ({ ...s, setNumber: i + 1 })),
+        };
+      }),
+    );
+  }
+
   // ---- Rest timer handlers ----
 
   const handleRestComplete = useCallback(
@@ -474,6 +514,35 @@ export function SessionLogger({
     });
   }
 
+  // ---- Replace exercise (session-only; source workout template untouched) ----
+
+  async function handleReplaceExercise(exercise: AvailableExercise) {
+    setPickerOpen(false);
+    const seId = current?.seId;
+    if (!seId) return;
+
+    const result = await replaceSessionExerciseAction(seId, exercise.id);
+    if (result.error || !result.sessionExerciseId) return;
+
+    const newEx: ExerciseState = {
+      seId: result.sessionExerciseId,
+      exerciseId: exercise.id,
+      name: exercise.name,
+      supersetGroup: null,
+      slots: [
+        {
+          id: null,
+          setNumber: 1,
+          weightInput: "",
+          repsInput: "",
+          completed: false,
+          saving: false,
+        },
+      ],
+    };
+    setExercises((prev) => prev.map((ex, i) => (i === currentIdx ? newEx : ex)));
+  }
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -518,7 +587,7 @@ export function SessionLogger({
           <p className="text-sm text-muted-foreground mb-3">No exercises yet. Add one to get started.</p>
           <button
             type="button"
-            onClick={() => setPickerOpen(true)}
+            onClick={() => { setPickerMode("add"); setPickerOpen(true); }}
             className="inline-flex items-center gap-1.5 rounded-[var(--radius-app)] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
           >
             <Plus className="h-4 w-4" />
@@ -553,6 +622,15 @@ export function SessionLogger({
                 </p>
               )}
             </div>
+            <button
+              type="button"
+              onClick={() => { setPickerMode("replace"); setPickerOpen(true); }}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-app)] border border-border bg-surface text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+              title="Replace exercise"
+              aria-label="Replace exercise"
+            >
+              <Repeat className="h-4 w-4" />
+            </button>
             <button
               type="button"
               onClick={() => setCurrentIdx((i) => Math.min(exercises.length - 1, i + 1))}
@@ -600,17 +678,18 @@ export function SessionLogger({
           {/* Set rows */}
           <div className="rounded-[var(--radius-app)] border border-border bg-surface overflow-hidden">
             {/* Column headers */}
-            <div className="grid grid-cols-[2rem_1fr_1fr_3rem] gap-2 border-b border-border px-3 py-2">
+            <div className="grid grid-cols-[2rem_1fr_1fr_3rem_2rem] gap-2 border-b border-border px-3 py-2">
               <span className="text-xs font-medium text-muted-foreground text-center">#</span>
               <span className="text-xs font-medium text-muted-foreground">{unitLabel}</span>
               <span className="text-xs font-medium text-muted-foreground">Reps</span>
               <span className="sr-only">Done</span>
+              <span className="sr-only">Delete</span>
             </div>
 
             {current?.slots.map((slot, si) => (
               <div
                 key={si}
-                className={`grid grid-cols-[2rem_1fr_1fr_3rem] gap-2 items-center px-3 py-2 border-b last:border-b-0 border-border ${slot.completed ? "bg-emerald-500/5" : ""}`}
+                className={`grid grid-cols-[2rem_1fr_1fr_3rem_2rem] gap-2 items-center px-3 py-2 border-b last:border-b-0 border-border ${slot.completed ? "bg-emerald-500/5" : ""}`}
               >
                 <span className="text-sm font-medium text-muted-foreground text-center">
                   {slot.setNumber}
@@ -653,6 +732,18 @@ export function SessionLogger({
                     </button>
                   )}
                 </div>
+                <div className="flex items-center justify-center">
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteSlot(currentIdx, si)}
+                    disabled={slot.saving}
+                    className="flex h-9 w-9 items-center justify-center text-muted-foreground transition-colors hover:text-danger disabled:opacity-30"
+                    title="Delete set"
+                    aria-label="Delete set"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -673,7 +764,7 @@ export function SessionLogger({
       <div className="flex gap-3">
         <button
           type="button"
-          onClick={() => setPickerOpen(true)}
+          onClick={() => { setPickerMode("add"); setPickerOpen(true); }}
           className="flex flex-1 items-center justify-center gap-1.5 h-11 rounded-[var(--radius-app)] border border-border bg-surface font-medium text-foreground transition-colors hover:bg-surface-muted"
         >
           <Plus className="h-4 w-4" />
@@ -692,9 +783,10 @@ export function SessionLogger({
       <ExercisePicker
         isOpen={pickerOpen}
         onClose={() => setPickerOpen(false)}
-        onSelect={handleAddExercise}
+        onSelect={pickerMode === "replace" ? handleReplaceExercise : handleAddExercise}
         availableExercises={availableExercises}
         addedExerciseIds={addedExerciseIds}
+        title={pickerMode === "replace" ? "Replace Exercise" : "Add Exercise"}
       />
 
       {showComplete && (

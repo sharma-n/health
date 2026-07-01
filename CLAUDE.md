@@ -121,6 +121,20 @@ roadmap (§11).** This file is the quick-start; SPEC.md is the source of truth.
   tests unchanged. Build clean.
   **Episodic memory (cross-conversation recall) is opt-in:** set `VECTOR_BACKEND=qdrant` + run LM Studio embedding
   server. Factual memory works out of the box without it.
+- **Workout editing + session set/exercise editing (post-M15): DONE** — three additions:
+  (1) **`update_workout` agent tool** — new `PATCH /api/internal/workouts/[id]` route (partial
+  metadata patch, or full exercise-list replacement identical to `updateWorkoutAction`'s
+  semantics) + a Python write tool (`write_tools.py`) that resolves the target workout by
+  `workout_id` or `workout_name` (via `get_workouts`); its tool description and the system
+  prompt both explicitly warn that `exercises` is a full replacement, not a diff, so the agent
+  must reconstruct the complete intended list before calling. (2) **Delete a set** during live
+  session logging — `deleteSetAction` in `src/lib/actions/session.ts` (renumbers remaining
+  sibling sets to stay contiguous 1..N in the same transaction) + a delete button on every set
+  row in `SessionLogger`. (3) **Replace the on-screen exercise mid-session** — `replaceSessionExerciseAction`
+  (atomic delete-old/create-new `SessionExercise`, session-only — the saved `Workout` template
+  is never touched) + a "Replace" button in `SessionLogger`'s exercise nav header, reusing
+  `ExercisePicker` (now takes an optional `title` prop). 16 new JS tests + 9 new Python tests;
+  all pass (404 JS / 88 Python). Build clean.
 - Remaining domain sections still render `<ComingSoon milestone="…" />` placeholder.
 
 ## Stack (note the versions — several have breaking changes vs. older training data)
@@ -162,7 +176,7 @@ npm run db:dev-seed    # wipe all users + create demo account with sample data (
 npm run db:studio
 
 # Tests (run these before and after every change to catch regressions)
-npm run test               # all 351 tests (~7s)
+npm run test               # all 404 tests (~7s)
 npm run test:unit          # unit + validation + analytics only (~2s, no DB)
 npm run test:integration   # server action + scenario tests (~5s, in-memory DB)
 npm run test:watch         # re-run on file changes during development
@@ -226,7 +240,7 @@ src/
       _auth.ts                     # shared X-Internal-Secret + X-User-Id validator
       sessions/ exercises/ workouts/ plans/ goals/ metrics/route.ts
       sessions/start/route.ts      # POST: create in-progress session (M14)
-      workouts/[id]/route.ts       # GET: single workout with exercises (M14)
+      workouts/[id]/route.ts       # GET: single workout with exercises (M14); PATCH: partial/full update (post-M15)
       analytics/ adherence/ prs/ progression/ muscle-volume/route.ts
       # workouts, plans, goals, exercises also have POST handlers (M13+)
     page.tsx                       # redirects -> /dashboard
@@ -242,12 +256,12 @@ agent_service/                     # Python sidecar (M10+)
   config.yaml                      # agent_kit config (LLM, memory, tools)
   src/health_agent/
     main.py service.py             # FastAPI + AgentService bootstrap
-    tools/ client.py read_tools.py coaching_tools.py write_tools.py  # httpx client + 9 read tools (M11+pre-M13) + 4 coaching tools (M12) + 8 write tools (M13+M14)
+    tools/ client.py read_tools.py coaching_tools.py write_tools.py  # httpx client + 9 read tools (M11+pre-M13) + 4 coaching tools (M12) + 9 write tools (M13+M14+post-M15)
 ```
 
 ## Tests
 
-**Always run `npm run test` before committing and after any non-trivial change.** All 351 tests must pass; a red suite blocks merging. The tests are fast (~7s total) so there's no reason to skip them.
+**Always run `npm run test` before committing and after any non-trivial change.** All 404 tests must pass; a red suite blocks merging. The tests are fast (~7s total) so there's no reason to skip them.
 
 ### Structure
 

@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
 }
 
 // Internal schema: order is assigned from array index, not required in body
-const internalExerciseSchema = z.object({
+export const internalExerciseSchema = z.object({
   exerciseId: z.string().min(1),
   targetSets: z.number().int().positive().nullable().optional(),
   targetReps: z.number().int().positive().nullable().optional(),

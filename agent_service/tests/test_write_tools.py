@@ -93,6 +93,122 @@ async def test_create_workout_no_exercises():
 
 
 # ---------------------------------------------------------------------------
+# update_workout
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_update_workout_by_id_metadata_only():
+    tool = _tool("update_workout")
+    with patch("health_agent.tools.write_tools.http_client") as mock_client:
+        mock_client.patch = AsyncMock(return_value=_resp({"id": "wk1"}, status=200))
+        result = await tool.handler("user1", {"workout_id": "wk1", "new_name": "Push Day (Heavy)"})
+
+    assert "wk1" in result
+    posted_body = mock_client.patch.call_args.kwargs.get("json", {})
+    assert posted_body.get("name") == "Push Day (Heavy)"
+    assert "exercises" not in posted_body
+
+
+@pytest.mark.asyncio
+async def test_update_workout_by_name_resolves_id():
+    tool = _tool("update_workout")
+    workouts_resp = [{"id": "wk1", "name": "Push Day"}, {"id": "wk2", "name": "Pull Day"}]
+    with patch("health_agent.tools.write_tools.http_client") as mock_client:
+        mock_client.get = AsyncMock(return_value=_resp(workouts_resp))
+        mock_client.patch = AsyncMock(return_value=_resp({"id": "wk1"}, status=200))
+        result = await tool.handler("user1", {"workout_name": "Push Day", "notes": "New notes"})
+
+    assert "wk1" in result
+    patched_url = mock_client.patch.call_args.args[0]
+    assert patched_url == "/api/internal/workouts/wk1"
+
+
+@pytest.mark.asyncio
+async def test_update_workout_name_not_found():
+    tool = _tool("update_workout")
+    with patch("health_agent.tools.write_tools.http_client") as mock_client:
+        mock_client.get = AsyncMock(return_value=_resp([]))
+        result = await tool.handler("user1", {"workout_name": "Nonexistent", "notes": "x"})
+
+    assert "error" in result.lower()
+    assert "get_workouts" in result
+
+
+@pytest.mark.asyncio
+async def test_update_workout_exercises_resolved():
+    tool = _tool("update_workout")
+    exercises_resp = [{"id": "ex1", "name": "Bench Press"}]
+    with patch("health_agent.tools.write_tools.http_client") as mock_client:
+        mock_client.get = AsyncMock(return_value=_resp(exercises_resp))
+        mock_client.patch = AsyncMock(return_value=_resp({"id": "wk1"}, status=200))
+        result = await tool.handler("user1", {
+            "workout_id": "wk1",
+            "exercises": [{"exercise_name": "Bench Press", "target_sets": 4}],
+        })
+
+    assert "wk1" in result
+    posted_body = mock_client.patch.call_args.kwargs.get("json", {})
+    assert posted_body["exercises"][0]["exerciseId"] == "ex1"
+    assert posted_body["exercises"][0]["targetSets"] == 4
+
+
+@pytest.mark.asyncio
+async def test_update_workout_exercises_unresolved_exercise():
+    tool = _tool("update_workout")
+    with patch("health_agent.tools.write_tools.http_client") as mock_client:
+        mock_client.get = AsyncMock(return_value=_resp([]))
+        result = await tool.handler("user1", {
+            "workout_id": "wk1",
+            "exercises": [{"exercise_name": "Unknown Exercise"}],
+        })
+
+    assert "error" in result.lower()
+    assert "Unknown Exercise" in result
+    mock_client.patch.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_workout_no_identifier():
+    tool = _tool("update_workout")
+    with patch("health_agent.tools.write_tools.http_client"):
+        result = await tool.handler("user1", {"new_name": "New"})
+
+    assert "error" in result.lower()
+    assert "workout_id" in result.lower() or "workout_name" in result.lower()
+
+
+@pytest.mark.asyncio
+async def test_update_workout_no_fields():
+    tool = _tool("update_workout")
+    with patch("health_agent.tools.write_tools.http_client"):
+        result = await tool.handler("user1", {"workout_id": "wk1"})
+
+    assert "error" in result.lower()
+
+
+@pytest.mark.asyncio
+async def test_update_workout_http_404():
+    tool = _tool("update_workout")
+    with patch("health_agent.tools.write_tools.http_client") as mock_client:
+        mock_client.patch = AsyncMock(return_value=_resp({"error": "Not found"}, status=404))
+        result = await tool.handler("user1", {"workout_id": "missing", "new_name": "X"})
+
+    assert "error" in result.lower()
+    assert "get_workouts" in result
+
+
+@pytest.mark.asyncio
+async def test_update_workout_http_error():
+    tool = _tool("update_workout")
+    with patch("health_agent.tools.write_tools.http_client") as mock_client:
+        mock_client.patch = AsyncMock(return_value=_resp({"error": "Server error"}, status=500))
+        result = await tool.handler("user1", {"workout_id": "wk1", "new_name": "X"})
+
+    assert "error" in result.lower()
+    assert "500" in result
+
+
+# ---------------------------------------------------------------------------
 # create_training_plan
 # ---------------------------------------------------------------------------
 
